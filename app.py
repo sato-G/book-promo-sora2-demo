@@ -111,34 +111,30 @@ with st.sidebar:
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.markdown('<div class="feature-card">', unsafe_allow_html=True)
-    st.subheader("🚀 主な機能")
+    with st.container():
+        st.subheader("🚀 主な機能")
 
-    features = [
-        ("📤", "EPUBアップロード", "書籍ファイルを自動解析"),
-        ("🤖", "AI分析", "Gemini 2.5で書籍を分析"),
-        ("🎨", "シナリオ生成", "複数のパターンを提案"),
-        ("🎬", "Sora2動画生成", "一撃で高品質動画を作成"),
-        ("📥", "ダウンロード", "MP4形式で保存")
-    ]
+        features = [
+            ("📤", "EPUBアップロード", "書籍ファイルを自動解析"),
+            ("🤖", "AI分析", "Gemini 2.5で書籍を分析"),
+            ("🎨", "シナリオ生成", "複数のパターンを提案"),
+            ("🎬", "Sora2動画生成", "一撃で高品質動画を作成"),
+            ("📥", "ダウンロード", "MP4形式で保存")
+        ]
 
-    for icon, title, desc in features:
-        st.markdown(f"**{icon} {title}**: {desc}")
-
-    st.markdown('</div>', unsafe_allow_html=True)
+        for icon, title, desc in features:
+            st.markdown(f"**{icon} {title}**: {desc}")
 
 with col2:
-    st.markdown('<div class="feature-card">', unsafe_allow_html=True)
-    st.subheader("⚙️ 技術スタック")
+    with st.container():
+        st.subheader("⚙️ 技術スタック")
 
-    st.markdown("""
-    - **Sora2**: 動画生成
-    - **Gemini 2.5**: テキスト分析
-    - **Streamlit**: UI
-    - **Python**: バックエンド
-    """)
-
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("""
+        - **Sora2**: 動画生成
+        - **Gemini 2.5**: テキスト分析
+        - **Streamlit**: UI
+        - **Python**: バックエンド
+        """)
 
 # ワークフローステップ
 st.markdown("---")
@@ -147,47 +143,41 @@ st.subheader("📋 ワークフロー")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.markdown('<div class="step-card">', unsafe_allow_html=True)
-    st.markdown("### 1️⃣ EPUBアップロード")
-    st.markdown("書籍ファイルをアップロードして自動解析")
+    with st.container():
+        st.markdown("### 1️⃣ EPUBアップロード")
+        st.markdown("書籍ファイルをアップロードして自動解析")
 
-    if st.button("開始 →", key="step1", use_container_width=True):
-        st.session_state.current_step = 1
-        st.switch_page("pages/1_upload_epub.py")
-
-    st.markdown('</div>', unsafe_allow_html=True)
+        if st.button("開始 →", key="step1", use_container_width=True):
+            st.session_state.current_step = 1
+            st.switch_page("pages/1_upload_epub.py")
 
 with col2:
-    st.markdown('<div class="step-card">', unsafe_allow_html=True)
-    st.markdown("### 2️⃣ シナリオ選択")
-    st.markdown("複数パターンから最適なシナリオを選択")
+    with st.container():
+        st.markdown("### 2️⃣ シナリオ選択")
+        st.markdown("複数パターンから最適なシナリオを選択")
 
-    disabled = 'uploaded_epub' not in st.session_state
+        disabled = 'uploaded_epub' not in st.session_state
 
-    if st.button("開始 →", key="step2", use_container_width=True, disabled=disabled):
-        st.session_state.current_step = 2
-        st.switch_page("pages/2_scenario_editor.py")
+        if st.button("開始 →", key="step2", use_container_width=True, disabled=disabled):
+            st.session_state.current_step = 2
+            st.switch_page("pages/2_scenario_editor.py")
 
-    if disabled:
-        st.caption("⚠️ Step 1を完了してください")
-
-    st.markdown('</div>', unsafe_allow_html=True)
+        if disabled:
+            st.caption("⚠️ Step 1を完了してください")
 
 with col3:
-    st.markdown('<div class="step-card">', unsafe_allow_html=True)
-    st.markdown("### 3️⃣ Sora2生成")
-    st.markdown("AIが一撃で動画を生成")
+    with st.container():
+        st.markdown("### 3️⃣ Sora2生成")
+        st.markdown("AIが一撃で動画を生成")
 
-    disabled = 'selected_scenario' not in st.session_state
+        disabled = 'selected_scenario' not in st.session_state
 
-    if st.button("開始 →", key="step3", use_container_width=True, disabled=disabled):
-        st.session_state.current_step = 3
-        st.switch_page("pages/3_sora2_generate.py")
+        if st.button("開始 →", key="step3", use_container_width=True, disabled=disabled):
+            st.session_state.current_step = 3
+            st.switch_page("pages/3_sora2_generate.py")
 
-    if disabled:
-        st.caption("⚠️ Step 2を完了してください")
-
-    st.markdown('</div>', unsafe_allow_html=True)
+        if disabled:
+            st.caption("⚠️ Step 2を完了してください")
 
 # フッター
 st.markdown("---")
