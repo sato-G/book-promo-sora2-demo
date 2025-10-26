@@ -78,8 +78,9 @@ def generate_video(
         # Note: 2025年1月時点でSora2 APIは限定プレビュー中
         # 実際のAPI仕様に合わせて調整が必要
 
-        response = client.videos.generate(
-            model="sora-2.0",
+        # OpenAI APIのSora2エンドポイント (正しいメソッド名)
+        response = client.video.generations.create(
+            model="sora-turbo-2024-12-20",
             prompt=prompt,
             size=aspect_ratio,  # または "1920x1080" 形式
             duration=duration

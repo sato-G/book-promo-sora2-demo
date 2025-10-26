@@ -93,8 +93,6 @@ st.markdown("---")
 st.subheader("✨ Sora2プロンプト生成")
 
 with st.container():
-    st.markdown('<div class="prompt-card">', unsafe_allow_html=True)
-
     # プロンプトタイプ選択
     prompt_type = st.radio(
         "プロンプトタイプ",
@@ -125,8 +123,6 @@ with st.container():
     )
 
     st.session_state.sora_prompt = edited_prompt
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # 動画設定
 st.markdown("---")
@@ -195,9 +191,8 @@ else:
     video_result = st.session_state.generated_video
 
     # 動画プレビュー
-    st.markdown('<div class="video-card">', unsafe_allow_html=True)
-
-    st.subheader("🎥 生成された動画")
+    with st.container():
+        st.subheader("🎥 生成された動画")
 
     if video_result.get('video_file') and video_result['video_file'].exists():
         # 動画表示
@@ -237,8 +232,6 @@ else:
 
     else:
         st.warning("⚠️ 動画ファイルが見つかりません")
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # 再生成ボタン
     st.markdown("---")
