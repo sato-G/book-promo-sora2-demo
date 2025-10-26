@@ -103,7 +103,10 @@ def generate_video(
 
     try:
         # Sora2 API呼び出し (create_and_poll で非同期生成+ポーリング)
-        print(f"🎬 Sora2で動画生成中... (model: {model}, size: {size}, duration: {duration}s)")
+        print("🎬 Sora2で動画生成中...")
+        print(f"   Model: {model}")
+        print(f"   Aspect Ratio: {aspect_ratio} → Size: {size}")
+        print(f"   Duration: {duration}s")
 
         video = client.videos.create_and_poll(
             model=model,

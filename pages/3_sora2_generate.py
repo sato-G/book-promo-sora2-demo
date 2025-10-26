@@ -176,11 +176,14 @@ if 'generated_video' not in st.session_state:
     if st.button("🚀 Sora2で動画生成", type="primary", use_container_width=True):
         with st.spinner("🎬 Sora2で動画を生成中..."):
             try:
+                aspect_ratio = scenario.get('aspect_ratio', '16:9')
+                st.write(f"DEBUG: アスペクト比 = {aspect_ratio}, Duration = {video_duration}")
+
                 # Sora2で動画生成
                 result = sora2_engine.generate_video(
                     prompt=st.session_state.sora_prompt,
                     book_name=scenario['book_name'],
-                    aspect_ratio=scenario.get('aspect_ratio', '16:9'),
+                    aspect_ratio=aspect_ratio,
                     duration=video_duration
                 )
 
