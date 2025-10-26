@@ -9,6 +9,7 @@ from . import summary_generator
 from . import scenario_generator_v2
 from . import sora2_engine
 from . import prompt_engineer
+from . import video_composer
 
 __all__ = [
     'utils',
@@ -18,4 +19,5 @@ __all__ = [
     'scenario_generator_v2',
     'sora2_engine',
     'prompt_engineer',
+    'video_composer',
 ]

@@ -11,7 +11,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backend import sora2_engine, prompt_engineer
+from backend import sora2_engine, prompt_engineer, video_composer
 
 st.set_page_config(
     page_title="3️⃣ Sora2動画生成",
@@ -93,6 +93,13 @@ st.markdown("---")
 st.subheader("✨ Sora2プロンプト生成")
 
 with st.container():
+    # 生成モード選択
+    generation_mode = st.radio(
+        "生成モード",
+        ["シングル（最大12秒）", "2パート結合（最大24秒）"],
+        help="2パート結合: 12秒×2本を生成して結合します"
+    )
+
     # プロンプトタイプ選択
     prompt_type = st.radio(
         "プロンプトタイプ",
@@ -101,39 +108,85 @@ with st.container():
     )
 
     # 動画の長さを選択（先に選択させる）
-    duration = st.radio(
-        "動画の長さ",
-        [4, 8, 12],
-        index=1,
-        format_func=lambda x: f"{x}秒",
-        help="Sora2 APIで選択可能な長さは 4, 8, 12秒のみです",
-        horizontal=True
-    )
+    if generation_mode == "シングル（最大12秒）":
+        duration = st.radio(
+            "動画の長さ",
+            [4, 8, 12],
+            index=2,
+            format_func=lambda x: f"{x}秒",
+            help="Sora2 APIで選択可能な長さは 4, 8, 12秒のみです",
+            horizontal=True
+        )
+        total_parts = 1
+    else:
+        st.info("📹 2パートモード: 12秒の動画を2本生成して結合します（合計24秒）")
+        duration = 12
+        total_parts = 2
 
     # プロンプト生成
-    if prompt_type == "詳細版（推奨）":
-        sora_prompt = prompt_engineer.create_sora2_prompt(
+    if total_parts == 1:
+        # シングルモード
+        if prompt_type == "詳細版（推奨）":
+            sora_prompt = prompt_engineer.create_sora2_prompt(
+                scenario=scenario,
+                aspect_ratio=scenario.get('aspect_ratio', '16:9'),
+                visual_style=scenario.get('visual_style', 'Photorealistic'),
+                duration=duration
+            )
+        else:
+            sora_prompt = prompt_engineer.create_simple_prompt(
+                book_name=scenario['book_name'],
+                summary=scenario.get('selected_pattern', {}).get('summary', ''),
+                visual_style=scenario.get('visual_style', 'Photorealistic')
+            )
+
+        # プロンプト表示・編集
+        edited_prompt = st.text_area(
+            "生成されたプロンプト（編集可能）",
+            value=sora_prompt,
+            height=300,
+            help="必要に応じてプロンプトを編集できます"
+        )
+
+        st.session_state.sora_prompt = edited_prompt
+        st.session_state.generation_mode = "single"
+    else:
+        # 2パートモード
+        st.markdown("#### Part 1 プロンプト")
+        prompt_part1 = prompt_engineer.create_sora2_prompt(
             scenario=scenario,
             aspect_ratio=scenario.get('aspect_ratio', '16:9'),
             visual_style=scenario.get('visual_style', 'Photorealistic'),
-            duration=duration
+            duration=duration,
+            part=1,
+            total_parts=2
         )
-    else:
-        sora_prompt = prompt_engineer.create_simple_prompt(
-            book_name=scenario['book_name'],
-            summary=scenario.get('selected_pattern', {}).get('summary', ''),
-            visual_style=scenario.get('visual_style', 'Photorealistic')
+        edited_prompt_part1 = st.text_area(
+            "Part 1 プロンプト（編集可能）",
+            value=prompt_part1,
+            height=200,
+            key="prompt_part1"
         )
 
-    # プロンプト表示・編集
-    edited_prompt = st.text_area(
-        "生成されたプロンプト（編集可能）",
-        value=sora_prompt,
-        height=300,
-        help="必要に応じてプロンプトを編集できます"
-    )
+        st.markdown("#### Part 2 プロンプト")
+        prompt_part2 = prompt_engineer.create_sora2_prompt(
+            scenario=scenario,
+            aspect_ratio=scenario.get('aspect_ratio', '16:9'),
+            visual_style=scenario.get('visual_style', 'Photorealistic'),
+            duration=duration,
+            part=2,
+            total_parts=2
+        )
+        edited_prompt_part2 = st.text_area(
+            "Part 2 プロンプト（編集可能）",
+            value=prompt_part2,
+            height=200,
+            key="prompt_part2"
+        )
 
-    st.session_state.sora_prompt = edited_prompt
+        st.session_state.sora_prompt_part1 = edited_prompt_part1
+        st.session_state.sora_prompt_part2 = edited_prompt_part2
+        st.session_state.generation_mode = "two_part"
 
 # 動画設定
 st.markdown("---")
@@ -150,12 +203,21 @@ elif video_duration <= 8:
 else:
     num_scenes = 4
 
+# 総尺の計算
+if st.session_state.get('generation_mode') == 'two_part':
+    total_duration = video_duration * 2
+    display_duration = f"{video_duration}秒 × 2パート = {total_duration}秒"
+else:
+    total_duration = video_duration
+    display_duration = f"{video_duration}秒"
+
 st.info(f"""
 **設定サマリー**
+- モード: {generation_mode}
 - アスペクト比: {scenario.get('aspect_ratio', '16:9')}
 - ビジュアルスタイル: {scenario.get('visual_style', 'Photorealistic')}
-- 動画の長さ: {video_duration}秒
-- シーン数: {num_scenes}シーン
+- 動画の長さ: {display_duration}
+- シーン数: {num_scenes}シーン/パート
 """)
 
 # 動画生成
@@ -174,35 +236,106 @@ if 'generated_video' not in st.session_state:
     """)
 
     if st.button("🚀 Sora2で動画生成", type="primary", use_container_width=True):
-        with st.spinner("🎬 Sora2で動画を生成中..."):
-            try:
-                aspect_ratio = scenario.get('aspect_ratio', '16:9')
-                st.write(f"DEBUG: アスペクト比 = {aspect_ratio}, Duration = {video_duration}")
+        aspect_ratio = scenario.get('aspect_ratio', '16:9')
 
-                # プロンプトのプレビュー（最初の200文字）
-                with st.expander("🔍 送信するプロンプト（デバッグ用）"):
-                    st.text(st.session_state.sora_prompt[:500] + "..." if len(st.session_state.sora_prompt) > 500 else st.session_state.sora_prompt)
+        if st.session_state.get('generation_mode') == 'two_part':
+            # 2パートモード
+            with st.spinner("🎬 Part 1を生成中... (12秒)"):
+                try:
+                    st.write(f"DEBUG: Part 1 - アスペクト比 = {aspect_ratio}, Duration = {video_duration}")
 
-                # Sora2で動画生成
-                result = sora2_engine.generate_video(
-                    prompt=st.session_state.sora_prompt,
-                    book_name=scenario['book_name'],
-                    aspect_ratio=aspect_ratio,
-                    duration=video_duration
-                )
+                    result_part1 = sora2_engine.generate_video(
+                        prompt=st.session_state.sora_prompt_part1,
+                        book_name=scenario['book_name'],
+                        aspect_ratio=aspect_ratio,
+                        duration=video_duration
+                    )
 
-                if result['status'] == 'success':
-                    st.session_state.generated_video = result
-                    st.success("✅ 動画生成が完了しました！")
+                    if result_part1['status'] != 'success':
+                        st.error(f"❌ Part 1生成エラー: {result_part1.get('error', '不明なエラー')}")
+                        st.stop()
+
+                    st.success("✅ Part 1完了！")
+
+                except Exception as e:
+                    st.error(f"❌ Part 1エラー: {str(e)}")
+                    st.exception(e)
+                    st.stop()
+
+            with st.spinner("🎬 Part 2を生成中... (12秒)"):
+                try:
+                    st.write(f"DEBUG: Part 2 - アスペクト比 = {aspect_ratio}, Duration = {video_duration}")
+
+                    result_part2 = sora2_engine.generate_video(
+                        prompt=st.session_state.sora_prompt_part2,
+                        book_name=scenario['book_name'],
+                        aspect_ratio=aspect_ratio,
+                        duration=video_duration
+                    )
+
+                    if result_part2['status'] != 'success':
+                        st.error(f"❌ Part 2生成エラー: {result_part2.get('error', '不明なエラー')}")
+                        st.stop()
+
+                    st.success("✅ Part 2完了！")
+
+                except Exception as e:
+                    st.error(f"❌ Part 2エラー: {str(e)}")
+                    st.exception(e)
+                    st.stop()
+
+            # 動画を結合
+            with st.spinner("🔗 動画を結合中..."):
+                try:
+                    video_files = [result_part1['video_file'], result_part2['video_file']]
+                    concatenated_file = video_composer.concatenate_videos(video_files)
+
+                    # 結合結果を保存
+                    final_result = {
+                        'video_file': concatenated_file,
+                        'prompt': f"Part 1:\n{st.session_state.sora_prompt_part1}\n\nPart 2:\n{st.session_state.sora_prompt_part2}",
+                        'aspect_ratio': aspect_ratio,
+                        'duration': total_duration,
+                        'generation_id': f"{result_part1['generation_id']}+{result_part2['generation_id']}",
+                        'status': 'success',
+                        'parts': [result_part1, result_part2]
+                    }
+
+                    st.session_state.generated_video = final_result
+                    st.success("✅ 2パート動画の結合が完了しました！")
                     st.balloons()
                     st.rerun()
-                else:
-                    st.error(f"❌ エラーが発生しました: {result.get('error', '不明なエラー')}")
-                    st.warning("⚠️ Sora2 APIが利用できない可能性があります。APIキーとアクセス権限を確認してください。")
 
-            except Exception as e:
-                st.error(f"❌ エラーが発生しました: {str(e)}")
-                st.exception(e)
+                except Exception as e:
+                    st.error(f"❌ 結合エラー: {str(e)}")
+                    st.exception(e)
+
+        else:
+            # シングルモード
+            with st.spinner("🎬 Sora2で動画を生成中..."):
+                try:
+                    st.write(f"DEBUG: アスペクト比 = {aspect_ratio}, Duration = {video_duration}")
+
+                    # Sora2で動画生成
+                    result = sora2_engine.generate_video(
+                        prompt=st.session_state.sora_prompt,
+                        book_name=scenario['book_name'],
+                        aspect_ratio=aspect_ratio,
+                        duration=video_duration
+                    )
+
+                    if result['status'] == 'success':
+                        st.session_state.generated_video = result
+                        st.success("✅ 動画生成が完了しました！")
+                        st.balloons()
+                        st.rerun()
+                    else:
+                        st.error(f"❌ エラーが発生しました: {result.get('error', '不明なエラー')}")
+                        st.warning("⚠️ Sora2 APIが利用できない可能性があります。APIキーとアクセス権限を確認してください。")
+
+                except Exception as e:
+                    st.error(f"❌ エラーが発生しました: {str(e)}")
+                    st.exception(e)
 else:
     st.success("✅ 動画生成済み")
 

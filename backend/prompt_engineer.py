@@ -6,7 +6,7 @@ Sora2プロンプトエンジニアリングモジュール
 sample_sora.pyのプロンプト構造を参考に、詳細なシーン構成を生成
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 
 # グローバルスタイル定義（sample_sora.pyと同様）
@@ -22,7 +22,9 @@ def create_sora2_prompt(
     scenario: Dict[str, Any],
     aspect_ratio: str = "16:9",
     visual_style: str = "Photorealistic",
-    duration: int = 10
+    duration: int = 10,
+    part: Optional[int] = None,
+    total_parts: int = 1
 ) -> str:
     """
     シナリオからSora2用の動画生成プロンプトを作成
@@ -35,6 +37,8 @@ def create_sora2_prompt(
         aspect_ratio: アスペクト比
         visual_style: ビジュアルスタイル
         duration: 動画の長さ（秒）
+        part: パート番号（2分割の場合: 1 or 2）
+        total_parts: 総パート数（デフォルト1、2分割の場合は2）
 
     Returns:
         Sora2プロンプト
@@ -77,17 +81,30 @@ def create_sora2_prompt(
     per_scene = duration / num_scenes
 
     # ヘッダー構築
-    header = (
-        f"Create a single book promotional video for '{book_name}'. "
-        f"Total length: {duration} seconds. Aspect {aspect_ratio}. "
-        f"Style: {style_desc}. {GLOBAL_STYLE} "
-        f"The video should convey the book's essence and make viewers want to read it. "
-        f"Do not depict any real person's identifiable face; use symbolic/abstract representations. "
-        f"No brand logos or trademarks."
-    )
+    if total_parts > 1 and part is not None:
+        # マルチパート生成の場合
+        header = (
+            f"Create part {part} of {total_parts} for a book promotional video for '{book_name}'. "
+            f"This segment length: {duration} seconds. Aspect {aspect_ratio}. "
+            f"Style: {style_desc}. {GLOBAL_STYLE} "
+            f"The video should convey the book's essence and make viewers want to read it. "
+            f"Do not depict any real person's identifiable face; use symbolic/abstract representations. "
+            f"No brand logos or trademarks. "
+            f"{'Opening sequence. Start with strong hook.' if part == 1 else 'Continuation from previous segment. Build toward conclusion.'}"
+        )
+    else:
+        # 単一動画の場合
+        header = (
+            f"Create a single book promotional video for '{book_name}'. "
+            f"Total length: {duration} seconds. Aspect {aspect_ratio}. "
+            f"Style: {style_desc}. {GLOBAL_STYLE} "
+            f"The video should convey the book's essence and make viewers want to read it. "
+            f"Do not depict any real person's identifiable face; use symbolic/abstract representations. "
+            f"No brand logos or trademarks."
+        )
 
     # シナリオをシーンに分割して構成
-    scenes = _split_scenario_into_scenes(summary, num_scenes, per_scene, book_name)
+    scenes = _split_scenario_into_scenes(summary, num_scenes, per_scene, book_name, part, total_parts)
 
     # プロンプト組み立て
     prompt_parts = [header] + scenes
@@ -99,7 +116,9 @@ def _split_scenario_into_scenes(
     summary: str,
     num_scenes: int,
     per_scene: float,
-    book_name: str
+    book_name: str,
+    part: Optional[int] = None,
+    total_parts: int = 1
 ) -> List[str]:
     """
     シナリオを複数シーンに分割
@@ -111,6 +130,8 @@ def _split_scenario_into_scenes(
         num_scenes: シーン数
         per_scene: 1シーンあたりの秒数
         book_name: 書籍名
+        part: パート番号（2分割の場合）
+        total_parts: 総パート数
 
     Returns:
         シーン記述のリスト（英語）
@@ -121,13 +142,33 @@ def _split_scenario_into_scenes(
     scenes = []
 
     # 基本的なシーン構成（書籍プロモーション用）
-    scene_templates = [
-        f"Opening scene (~{per_scene:.1f}s): Cinematic establishing shot. Camera slowly pushes in on symbolic imagery representing the book's core theme. Warm, inviting lighting. Subtle motion.",
-        f"Scene 2 (~{per_scene:.1f}s): Visual metaphor sequence. Smooth camera movement revealing key thematic elements. Professional color grading. Gentle transitions.",
-        f"Scene 3 (~{per_scene:.1f}s): Emotional beat. Close-up details that capture the essence and mood. Dynamic but controlled camera work.",
-        f"Scene 4 (~{per_scene:.1f}s): Building momentum. Wide to medium shots showing scope and impact. Cinematic framing.",
-        f"Final scene (~{per_scene:.1f}s): Title reveal. Camera pulls back to show book title '{book_name}' elegantly displayed. Fade to clean end frame."
-    ]
+    if total_parts == 2:
+        # 2パート構成の場合
+        if part == 1:
+            # Part 1: 導入〜中盤
+            scene_templates = [
+                f"Opening scene (~{per_scene:.1f}s): Cinematic establishing shot. Camera slowly pushes in on symbolic imagery representing the book's core theme. Warm, inviting lighting. Strong opening hook.",
+                f"Scene 2 (~{per_scene:.1f}s): Visual metaphor sequence. Smooth camera movement revealing key thematic elements. Professional color grading.",
+                f"Scene 3 (~{per_scene:.1f}s): Emotional beat. Close-up details that capture the essence and mood. Dynamic but controlled camera work.",
+                f"Scene 4 (~{per_scene:.1f}s): Building momentum. Wide to medium shots showing scope. Transition toward Part 2."
+            ]
+        else:
+            # Part 2: 中盤〜クライマックス
+            scene_templates = [
+                f"Continuation (~{per_scene:.1f}s): Picking up momentum. Seamless visual flow from previous segment. Intensifying atmosphere.",
+                f"Scene 2 (~{per_scene:.1f}s): Key emotional moment. Powerful visual metaphor. High impact framing.",
+                f"Scene 3 (~{per_scene:.1f}s): Climactic sequence. Dynamic camera work building to conclusion.",
+                f"Final scene (~{per_scene:.1f}s): Title reveal. Camera pulls back to show book title '{book_name}' elegantly displayed. Strong ending with call-to-action feel."
+            ]
+    else:
+        # 単一動画の場合
+        scene_templates = [
+            f"Opening scene (~{per_scene:.1f}s): Cinematic establishing shot. Camera slowly pushes in on symbolic imagery representing the book's core theme. Warm, inviting lighting. Subtle motion.",
+            f"Scene 2 (~{per_scene:.1f}s): Visual metaphor sequence. Smooth camera movement revealing key thematic elements. Professional color grading. Gentle transitions.",
+            f"Scene 3 (~{per_scene:.1f}s): Emotional beat. Close-up details that capture the essence and mood. Dynamic but controlled camera work.",
+            f"Scene 4 (~{per_scene:.1f}s): Building momentum. Wide to medium shots showing scope and impact. Cinematic framing.",
+            f"Final scene (~{per_scene:.1f}s): Title reveal. Camera pulls back to show book title '{book_name}' elegantly displayed. Fade to clean end frame."
+        ]
 
     # num_scenesに合わせてテンプレートを選択
     for i in range(num_scenes):
