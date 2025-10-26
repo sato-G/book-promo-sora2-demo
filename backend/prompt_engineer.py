@@ -24,7 +24,8 @@ def create_sora2_prompt(
     visual_style: str = "Photorealistic",
     duration: int = 10,
     part: Optional[int] = None,
-    total_parts: int = 1
+    total_parts: int = 1,
+    narration_text: Optional[str] = None
 ) -> str:
     """
     シナリオからSora2用の動画生成プロンプトを作成
@@ -39,6 +40,7 @@ def create_sora2_prompt(
         duration: 動画の長さ（秒）
         part: パート番号（2分割の場合: 1 or 2）
         total_parts: 総パート数（デフォルト1、2分割の場合は2）
+        narration_text: ナレーションテキスト（日本語可）
 
     Returns:
         Sora2プロンプト
@@ -46,7 +48,12 @@ def create_sora2_prompt(
     book_name = scenario.get('book_name', '書籍')
     pattern = scenario.get('selected_pattern', {})
     pattern_name = pattern.get('pattern_name', '標準')
-    summary = pattern.get('summary', '')
+
+    # ナレーションテキストを使用（指定がなければデフォルトのsummary）
+    if narration_text:
+        summary = narration_text
+    else:
+        summary = pattern.get('summary', '')
 
     # ビジュアルスタイルに応じたスタイル記述
     style_map = {
@@ -80,6 +87,16 @@ def create_sora2_prompt(
 
     per_scene = duration / num_scenes
 
+    # ナレーション付き指示（sample_sora.py形式）
+    has_narration = summary and len(summary) > 10
+    narration_instruction = ""
+    if has_narration:
+        narration_instruction = (
+            " Audio: Generate Japanese voice-over narration as instructed; "
+            "natural, emotive Japanese voice (professional narrator quality). "
+            "Add subtle cinematic BGM (no vocals); automatically duck BGM under voice by ~8 dB."
+        )
+
     # ヘッダー構築
     if total_parts > 1 and part is not None:
         # マルチパート生成の場合
@@ -91,6 +108,7 @@ def create_sora2_prompt(
             f"Do not depict any real person's identifiable face; use symbolic/abstract representations. "
             f"No brand logos or trademarks. "
             f"{'Opening sequence. Start with strong hook.' if part == 1 else 'Continuation from previous segment. Build toward conclusion.'}"
+            f"{narration_instruction}"
         )
     else:
         # 単一動画の場合
@@ -101,10 +119,11 @@ def create_sora2_prompt(
             f"The video should convey the book's essence and make viewers want to read it. "
             f"Do not depict any real person's identifiable face; use symbolic/abstract representations. "
             f"No brand logos or trademarks."
+            f"{narration_instruction}"
         )
 
     # シナリオをシーンに分割して構成
-    scenes = _split_scenario_into_scenes(summary, num_scenes, per_scene, book_name, part, total_parts)
+    scenes = _split_scenario_into_scenes(summary, num_scenes, per_scene, book_name, part, total_parts, has_narration)
 
     # プロンプト組み立て
     prompt_parts = [header] + scenes
@@ -118,7 +137,8 @@ def _split_scenario_into_scenes(
     per_scene: float,
     book_name: str,
     part: Optional[int] = None,
-    total_parts: int = 1
+    total_parts: int = 1,
+    has_narration: bool = False
 ) -> List[str]:
     """
     シナリオを複数シーンに分割
@@ -132,14 +152,27 @@ def _split_scenario_into_scenes(
         book_name: 書籍名
         part: パート番号（2分割の場合）
         total_parts: 総パート数
+        has_narration: ナレーションを含むか
 
     Returns:
-        シーン記述のリスト（英語）
+        シーン記述のリスト（英語+日本語ナレーション）
     """
-    # シンプルな英語シーン記述を生成
-    # 日本語シナリオではなく、視覚的な指示のみを含める
-
     scenes = []
+
+    # 日本語シナリオをシーンごとに分割
+    narration_parts = []
+    if has_narration and summary:
+        # 文を分割
+        sentences = [s.strip() for s in summary.split('。') if s.strip()]
+        sentences_per_scene = max(1, len(sentences) // num_scenes)
+
+        for i in range(num_scenes):
+            start_idx = i * sentences_per_scene
+            end_idx = start_idx + sentences_per_scene if i < num_scenes - 1 else len(sentences)
+            narration_text = '。'.join(sentences[start_idx:end_idx])
+            if narration_text:
+                narration_text += '。'
+            narration_parts.append(narration_text)
 
     # 基本的なシーン構成（書籍プロモーション用）
     if total_parts == 2:
@@ -170,12 +203,18 @@ def _split_scenario_into_scenes(
             f"Final scene (~{per_scene:.1f}s): Title reveal. Camera pulls back to show book title '{book_name}' elegantly displayed. Fade to clean end frame."
         ]
 
-    # num_scenesに合わせてテンプレートを選択
+    # num_scenesに合わせてテンプレートを選択し、ナレーションを追加
     for i in range(num_scenes):
         if i < len(scene_templates):
-            scenes.append(scene_templates[i])
+            scene_text = scene_templates[i]
         else:
-            scenes.append(f"Scene {i+1} (~{per_scene:.1f}s): Smooth cinematic shot with professional composition.")
+            scene_text = f"Scene {i+1} (~{per_scene:.1f}s): Smooth cinematic shot with professional composition."
+
+        # ナレーションを追加（sample_sora.py形式）
+        if has_narration and i < len(narration_parts) and narration_parts[i]:
+            scene_text += f"\nVoice-over (Japanese): {narration_parts[i]}"
+
+        scenes.append(scene_text)
 
     return scenes
 
