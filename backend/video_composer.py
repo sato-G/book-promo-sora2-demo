@@ -3,12 +3,20 @@
 動画結合モジュール
 
 複数のSora2生成動画を結合して1つの長い動画を作成
+moviepyを使用（Streamlit Cloud対応）
 """
 
 from pathlib import Path
 from typing import List, Optional
-import subprocess
 import time
+
+try:
+    from moviepy.editor import VideoFileClip, concatenate_videoclips
+    MOVIEPY_AVAILABLE = True
+except ImportError:
+    MOVIEPY_AVAILABLE = False
+    # フォールバック用
+    import subprocess
 
 
 def concatenate_videos(
@@ -40,11 +48,46 @@ def concatenate_videos(
         timestamp = int(time.time())
         output_file = output_dir / f"concatenated_{timestamp}.mp4"
 
-    # ffmpegを使用して結合
-    # concat demuxerを使用する方法
+    # moviepyを優先的に使用（Streamlit Cloud対応）
+    if MOVIEPY_AVAILABLE:
+        try:
+            print(f"🎬 moviepyで動画を結合中... ({len(video_files)}個のファイル)")
+
+            # 動画クリップをロード
+            clips = [VideoFileClip(str(f)) for f in video_files]
+
+            # 結合
+            final_clip = concatenate_videoclips(clips, method="compose")
+
+            # 出力
+            final_clip.write_videofile(
+                str(output_file),
+                codec='libx264',
+                audio_codec='aac',
+                temp_audiofile='temp-audio.m4a',
+                remove_temp=True,
+                logger=None  # ログ出力を抑制
+            )
+
+            # クリーンアップ
+            for clip in clips:
+                clip.close()
+            final_clip.close()
+
+            print(f"✓ 結合完了: {output_file}")
+            return output_file
+
+        except Exception as e:
+            print(f"⚠️ moviepyでの結合に失敗: {e}")
+            # ffmpegにフォールバック
+            if not check_ffmpeg_available():
+                raise RuntimeError(f"moviepyとffmpeg両方が利用できません: {e}")
+
+    # ffmpegを使用（フォールバック）
     concat_list_file = output_file.parent / f"concat_list_{int(time.time())}.txt"
 
     try:
+        import subprocess
         # concat用のリストファイルを作成
         with open(concat_list_file, 'w') as f:
             for video_file in video_files:

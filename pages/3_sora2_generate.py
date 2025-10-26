@@ -393,6 +393,42 @@ else:
     with st.container():
         st.subheader("🎥 生成された動画")
 
+    # 2パートモードの場合、個別パートも表示
+    if video_result.get('parts'):
+        st.markdown("### 📹 個別パート")
+        col_p1, col_p2 = st.columns(2)
+
+        with col_p1:
+            st.markdown("**Part 1**")
+            part1 = video_result['parts'][0]
+            if part1['video_file'] and part1['video_file'].exists():
+                st.video(str(part1['video_file']))
+                with open(part1['video_file'], 'rb') as f:
+                    st.download_button(
+                        "📥 Part 1をダウンロード",
+                        data=f.read(),
+                        file_name=f"part1_{scenario['book_name']}.mp4",
+                        mime="video/mp4",
+                        use_container_width=True
+                    )
+
+        with col_p2:
+            st.markdown("**Part 2**")
+            part2 = video_result['parts'][1]
+            if part2['video_file'] and part2['video_file'].exists():
+                st.video(str(part2['video_file']))
+                with open(part2['video_file'], 'rb') as f:
+                    st.download_button(
+                        "📥 Part 2をダウンロード",
+                        data=f.read(),
+                        file_name=f"part2_{scenario['book_name']}.mp4",
+                        mime="video/mp4",
+                        use_container_width=True
+                    )
+
+        st.markdown("---")
+        st.markdown("### 🎬 結合版")
+
     if video_result.get('video_file') and video_result['video_file'].exists():
         # 動画表示
         col_left, col_video, col_right = st.columns([1, 3, 1])
