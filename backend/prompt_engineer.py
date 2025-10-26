@@ -65,8 +65,15 @@ def create_sora2_prompt(
 
     style_desc = style_map.get(visual_style, "professional, high-quality")
 
-    # シーン分割（durationに応じて3-5シーン）
-    num_scenes = 3 if duration <= 8 else 4 if duration <= 10 else 5
+    # シーン分割（durationに応じて2-5シーン）
+    # 4秒: 2シーン, 8秒: 3シーン, 12秒: 4シーン
+    if duration <= 4:
+        num_scenes = 2
+    elif duration <= 8:
+        num_scenes = 3
+    else:
+        num_scenes = 4
+
     per_scene = duration / num_scenes
 
     # ヘッダー構築

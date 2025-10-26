@@ -46,7 +46,7 @@ def generate_video(
         prompt: 動画生成プロンプト
         book_name: 書籍名（ファイル名用）
         aspect_ratio: アスペクト比 ("16:9", "9:16", "1:1")
-        duration: 動画の長さ（秒） - 8, 10, 12のみ指定可能
+        duration: 動画の長さ（秒） - 4, 8, 12のみ指定可能
         output_dir: 出力ディレクトリ（Noneの場合は自動生成）
         model: 使用モデル ("sora-2" or "sora-2-pro")
 
@@ -64,12 +64,12 @@ def generate_video(
     """
     client = OpenAI(api_key=get_api_key())
 
-    # durationの検証（8, 10, 12のみ）
-    allowed_durations = [8, 10, 12]
+    # durationの検証（4, 8, 12のみ）
+    allowed_durations = [4, 8, 12]
     if duration not in allowed_durations:
         # 最も近い値を選択
         duration = min(allowed_durations, key=lambda x: abs(x - duration))
-        print(f"⚠️ Duration adjusted to {duration}s (only 8, 10, 12 are allowed)")
+        print(f"⚠️ Duration adjusted to {duration}s (only 4, 8, 12 are allowed)")
 
     # 出力ディレクトリの準備
     if output_dir is None:
@@ -79,12 +79,21 @@ def generate_video(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # アスペクト比をサイズに変換
-    size_map = {
-        "16:9": "1792x1024",
-        "9:16": "1024x1792",
-        "1:1": "1024x1024"
-    }
-    size = size_map.get(aspect_ratio, "1024x1792")
+    # sora-2: 720x1280, 1280x720 のみ
+    # sora-2-pro: 1024x1792, 1792x1024 もサポート
+    if "pro" in model.lower():
+        size_map = {
+            "16:9": "1792x1024",
+            "9:16": "1024x1792",
+            "1:1": "1024x1024"
+        }
+    else:
+        size_map = {
+            "16:9": "1280x720",
+            "9:16": "720x1280",
+            "1:1": "720x1280"  # 1:1は非対応なので縦型を使用
+        }
+    size = size_map.get(aspect_ratio, "720x1280")
 
     # ファイル名の準備
     safe_book_name = "".join(c for c in book_name if c.isalnum() or c in (' ', '-', '_')).strip()

@@ -103,10 +103,10 @@ with st.container():
     # 動画の長さを選択（先に選択させる）
     duration = st.radio(
         "動画の長さ",
-        [8, 10, 12],
+        [4, 8, 12],
         index=1,
         format_func=lambda x: f"{x}秒",
-        help="Sora2 APIで選択可能な長さは 8, 10, 12秒のみです",
+        help="Sora2 APIで選択可能な長さは 4, 8, 12秒のみです",
         horizontal=True
     )
 
@@ -142,12 +142,20 @@ st.subheader("⚙️ 生成設定サマリー")
 # durationはプロンプト生成時に選択済み
 video_duration = duration
 
+# シーン数計算
+if video_duration <= 4:
+    num_scenes = 2
+elif video_duration <= 8:
+    num_scenes = 3
+else:
+    num_scenes = 4
+
 st.info(f"""
 **設定サマリー**
 - アスペクト比: {scenario.get('aspect_ratio', '16:9')}
 - ビジュアルスタイル: {scenario.get('visual_style', 'Photorealistic')}
 - 動画の長さ: {video_duration}秒
-- シーン数: {3 if video_duration <= 8 else 4 if video_duration <= 10 else 5}シーン
+- シーン数: {num_scenes}シーン
 """)
 
 # 動画生成
