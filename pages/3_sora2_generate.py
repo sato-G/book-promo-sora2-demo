@@ -11,7 +11,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backend import sora2_engine, prompt_engineer, video_composer
+from backend import sora2_engine, prompt_engineer, video_composer, session_manager
 
 st.set_page_config(
     page_title="3️⃣ Sora2動画生成",
@@ -61,6 +61,59 @@ with st.sidebar:
     if st.button("⬅️ シナリオ選択に戻る"):
         st.session_state.current_step = 2
         st.switch_page("pages/2_scenario_editor.py")
+
+    # セッション復元UI
+    st.markdown("---")
+    st.header("💾 セッション管理")
+
+    # 保存済みセッション一覧
+    saved_sessions = session_manager.get_saved_sessions()
+    if saved_sessions:
+        st.info(f"📂 保存済み: {len(saved_sessions)}件")
+
+        # 最新5件を表示
+        for session_file in saved_sessions[:5]:
+            # ファイル名から書籍名と日時を抽出
+            filename = session_file.stem
+            # session_{book_name}_{timestamp}.json or session_{book_name}_latest.json
+            if '_latest' in filename:
+                book_name = filename.replace('session_', '').replace('_latest', '')
+                label = f"📕 {book_name} (最新)"
+            else:
+                parts = filename.replace('session_', '').split('_')
+                if len(parts) >= 3:
+                    book_name = '_'.join(parts[:-2])
+                    timestamp = f"{parts[-2]}_{parts[-1]}"
+                    label = f"📕 {book_name} ({timestamp})"
+                else:
+                    label = filename
+
+            if st.button(f"復元: {label}", key=f"restore_{session_file.name}"):
+                try:
+                    session_data = session_manager.load_session_state(book_name, use_latest=True)
+                    if session_data:
+                        # セッション状態を復元
+                        if 'scenario' in session_data:
+                            st.session_state.selected_scenario = session_data['scenario']
+                        if 'generated_video' in session_data:
+                            st.session_state.generated_video = session_data['generated_video']
+                        if 'generation_mode' in session_data:
+                            st.session_state.generation_mode = session_data['generation_mode']
+                        if 'edited_scenario' in session_data:
+                            st.session_state.edited_scenario = session_data['edited_scenario']
+                        if 'edited_scenario_part1' in session_data:
+                            st.session_state.edited_scenario_part1 = session_data['edited_scenario_part1']
+                        if 'edited_scenario_part2' in session_data:
+                            st.session_state.edited_scenario_part2 = session_data['edited_scenario_part2']
+
+                        st.success(f"✅ セッション復元: {book_name}")
+                        st.rerun()
+                    else:
+                        st.error("❌ セッションファイルが見つかりません")
+                except Exception as e:
+                    st.error(f"❌ 復元エラー: {str(e)}")
+    else:
+        st.info("💡 まだセッションがありません")
 
 # セッション状態チェック
 if 'selected_scenario' not in st.session_state:
@@ -335,6 +388,21 @@ if 'generated_video' not in st.session_state:
                     }
 
                     st.session_state.generated_video = final_result
+
+                    # セッション保存
+                    try:
+                        session_data = {
+                            'book_name': scenario['book_name'],
+                            'scenario': scenario,
+                            'generated_video': final_result,
+                            'generation_mode': 'two_part',
+                            'edited_scenario_part1': st.session_state.get('edited_scenario_part1', ''),
+                            'edited_scenario_part2': st.session_state.get('edited_scenario_part2', ''),
+                        }
+                        session_manager.save_session_state(session_data, scenario['book_name'])
+                    except Exception as e:
+                        st.warning(f"⚠️ セッション保存エラー: {str(e)}")
+
                     st.success("✅ 2パート動画の結合が完了しました！")
                     st.balloons()
                     st.rerun()
@@ -359,6 +427,20 @@ if 'generated_video' not in st.session_state:
 
                     if result['status'] == 'success':
                         st.session_state.generated_video = result
+
+                        # セッション保存
+                        try:
+                            session_data = {
+                                'book_name': scenario['book_name'],
+                                'scenario': scenario,
+                                'generated_video': result,
+                                'generation_mode': 'single',
+                                'edited_scenario': st.session_state.get('edited_scenario', ''),
+                            }
+                            session_manager.save_session_state(session_data, scenario['book_name'])
+                        except Exception as e:
+                            st.warning(f"⚠️ セッション保存エラー: {str(e)}")
+
                         st.success("✅ 動画生成が完了しました！")
                         st.balloons()
                         st.rerun()

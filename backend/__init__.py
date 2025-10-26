@@ -10,6 +10,7 @@ from . import scenario_generator_v2
 from . import sora2_engine
 from . import prompt_engineer
 from . import video_composer
+from . import session_manager
 
 __all__ = [
     'utils',
@@ -20,4 +21,5 @@ __all__ = [
     'sora2_engine',
     'prompt_engineer',
     'video_composer',
+    'session_manager',
 ]
