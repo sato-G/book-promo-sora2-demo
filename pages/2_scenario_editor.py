@@ -60,75 +60,12 @@ with st.sidebar:
 # 前提チェック
 if not st.session_state.get('book_analysis'):
     st.warning("⚠️ 先にEPUBファイルをアップロードしてください")
-
-    # セッション復元を試みる
-    from backend import session_manager, utils
-    project_root = utils.get_project_root()
-    sessions_dir = project_root / "data" / "internal" / "sessions"
-
-    if sessions_dir.exists():
-        session_files = list(sessions_dir.glob("session_*_latest.json"))
-        if session_files:
-            # 最新のセッションファイルを取得
-            latest_session_file = max(session_files, key=lambda p: p.stat().st_mtime)
-            book_name = latest_session_file.stem.replace('session_', '').replace('_latest', '')
-
-            st.info(f"💾 前回のセッションが見つかりました: **{book_name}**")
-            col_r1, col_r2 = st.columns(2)
-
-            with col_r1:
-                if st.button("📂 セッションを復元", use_container_width=True, type="primary"):
-                    saved_session = session_manager.load_session_state(book_name)
-                    if saved_session:
-                        # book_analysisを復元
-                        if saved_session.get('book_analysis'):
-                            st.session_state.book_analysis = saved_session['book_analysis']
-                        # その他のデータも復元
-                        if saved_session.get('scenarios'):
-                            st.session_state.scenarios = saved_session['scenarios']
-                        if saved_session.get('selected_scenario'):
-                            st.session_state.selected_scenario = saved_session['selected_scenario']
-                        st.success("✅ セッションを復元しました")
-                        st.rerun()
-
-            with col_r2:
-                if st.button("← EPUBアップロードへ", use_container_width=True):
-                    st.switch_page("pages/1_upload_epub.py")
-
-            st.stop()
-
     if st.button("← EPUBアップロードへ"):
         st.switch_page("pages/1_upload_epub.py")
     st.stop()
 
 book_analysis = st.session_state.book_analysis
 st.info(f"📁 書籍: **{book_analysis['book_name']}**")
-
-# セッション復元機能
-if not st.session_state.get('scenarios'):
-    from backend import session_manager
-    saved_session = session_manager.load_session_state(book_analysis['book_name'])
-    if saved_session and saved_session.get('scenarios'):
-        st.info("💾 前回のセッションが見つかりました")
-        col_restore1, col_restore2 = st.columns(2)
-        with col_restore1:
-            if st.button("📂 前回のシナリオを復元", use_container_width=True, type="primary"):
-                st.session_state.scenarios = saved_session.get('scenarios')
-                if saved_session.get('selected_scenario'):
-                    st.session_state.selected_scenario = saved_session.get('selected_scenario')
-                if saved_session.get('selected_pattern_id'):
-                    st.session_state.selected_pattern_id = saved_session.get('selected_pattern_id')
-                if saved_session.get('aspect_ratio'):
-                    st.session_state.aspect_ratio = saved_session.get('aspect_ratio')
-                if saved_session.get('visual_style'):
-                    st.session_state.visual_style = saved_session.get('visual_style')
-                if saved_session.get('num_scenes'):
-                    st.session_state.num_scenes = saved_session.get('num_scenes')
-                st.rerun()
-        with col_restore2:
-            if st.button("🆕 新しくシナリオを生成", use_container_width=True):
-                # 何もせず通常フローへ
-                pass
 
 # シナリオ生成
 st.markdown("---")
@@ -161,13 +98,6 @@ if not st.session_state.get('scenarios'):
                 scenario_generator_v2.save_scenarios(book_analysis['book_name'], patterns)
 
                 st.session_state.scenarios = patterns
-
-                # セッション保存
-                from backend import session_manager
-                session_manager.save_session_state({
-                    'book_analysis': book_analysis,
-                    'scenarios': patterns
-                }, book_analysis['book_name'])
 
                 st.success(f"✅ {len(patterns)}個のシナリオパターンを生成しました！")
                 st.balloons()
@@ -323,20 +253,8 @@ if st.session_state.get('scenarios'):
             st.session_state.selected_scenario = scenario_data
             st.session_state.current_step = 3
 
-            # セッション保存
-            from backend import session_manager
-            session_manager.save_session_state({
-                'book_analysis': book_analysis,
-                'scenarios': st.session_state.scenarios,
-                'selected_scenario': scenario_data,
-                'selected_pattern_id': st.session_state.selected_pattern_id,
-                'aspect_ratio': st.session_state.aspect_ratio,
-                'visual_style': st.session_state.visual_style,
-                'num_scenes': st.session_state.num_scenes
-            }, book_analysis['book_name'])
-
             st.success("✅ 設定を保存しました")
-            st.switch_page("pages/3_storyboard.py")
+            st.switch_page("pages/3_sora2_generate.py")
     else:
         st.warning("⚠️ シナリオパターン・アスペクト比・ビジュアルスタイルをすべて選択してください")
         if st.button("次へ", type="primary", use_container_width=True, disabled=True):
