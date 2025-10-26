@@ -3,15 +3,26 @@
 Sora2プロンプトエンジニアリングモジュール
 
 書籍情報とシナリオから最適なSora2プロンプトを生成
+sample_sora.pyのプロンプト構造を参考に、詳細なシーン構成を生成
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, List
+
+
+# グローバルスタイル定義（sample_sora.pyと同様）
+GLOBAL_STYLE = (
+    "Cinematic, high quality, professional. "
+    "Slow, deliberate camera moves; no jitter, no fast zooms, no jump cuts. "
+    "Clean subject silhouette, gentle filmic contrast, subtle grain. "
+    "Crisp motion, minimal motion blur."
+)
 
 
 def create_sora2_prompt(
     scenario: Dict[str, Any],
     aspect_ratio: str = "16:9",
-    visual_style: str = "Photorealistic"
+    visual_style: str = "Photorealistic",
+    duration: int = 10
 ) -> str:
     """
     シナリオからSora2用の動画生成プロンプトを作成
@@ -20,9 +31,10 @@ def create_sora2_prompt(
         scenario: シナリオ情報
             - book_name: 書籍名
             - selected_pattern: 選択されたパターン
-            - summary: 要約
+            - summary: プロモーションシナリオ
         aspect_ratio: アスペクト比
         visual_style: ビジュアルスタイル
+        duration: 動画の長さ（秒）
 
     Returns:
         Sora2プロンプト
@@ -32,52 +44,99 @@ def create_sora2_prompt(
     pattern_name = pattern.get('pattern_name', '標準')
     summary = pattern.get('summary', '')
 
-    # ビジュアルスタイルの説明を生成
-    style_descriptions = {
-        "Photorealistic": "photorealistic, cinematic, high-quality film production",
-        "Anime": "anime style, vibrant colors, Japanese animation aesthetic",
-        "Illustration": "illustrated, artistic, hand-drawn aesthetic",
-        "3D Render": "3D rendered, modern CGI, polished digital art",
-        "Minimalist": "minimalist, clean design, simple geometric shapes"
+    # ビジュアルスタイルに応じたスタイル記述
+    style_map = {
+        "Photorealistic": "photorealistic, cinematic documentary style",
+        "Picture book": "illustrated picture book style, warm hand-painted aesthetic",
+        "3D cartoon": "3D cartoon, stylized character design, vibrant",
+        "Retro comics": "retro comic book style, vintage halftone, bold linework",
+        "Anime": "2D anime style, cel-shaded, hand-drawn aesthetic",
+        "Pixel art": "pixel art, retro 16-bit style",
+        "Cinematic": "cinematic film production, professional color grading",
+        "Hyper cartoon": "hyper-expressive cartoon, exaggerated motion and poses",
+        "Illustration": "illustration, artistic hand-drawn look",
+        "Dreamtale": "dreamlike, surreal, ethereal atmosphere",
+        "Skytale": "skytale style, abstract geometric patterns",
+        "80s film": "1980s film aesthetic, vintage grain, nostalgic tones",
+        "Minimalist": "minimalist, clean simple design, negative space",
+        "Horror": "horror atmosphere, dark moody lighting, unsettling",
+        "Sketchbook": "sketchbook style, hand-drawn pencil aesthetic"
     }
 
-    style_desc = style_descriptions.get(visual_style, "professional, high-quality")
+    style_desc = style_map.get(visual_style, "professional, high-quality")
 
-    # アスペクト比による構図の調整
-    composition_hints = {
-        "16:9": "wide cinematic composition, landscape orientation",
-        "9:16": "vertical mobile-first composition, portrait orientation",
-        "1:1": "square composition, balanced framing"
-    }
+    # シーン分割（durationに応じて3-5シーン）
+    num_scenes = 3 if duration <= 8 else 4 if duration <= 10 else 5
+    per_scene = duration / num_scenes
 
-    composition = composition_hints.get(aspect_ratio, "")
+    # ヘッダー構築
+    header = (
+        f"Create a single book promotional video for '{book_name}'. "
+        f"Total length: {duration} seconds. Aspect {aspect_ratio}. "
+        f"Style: {style_desc}. {GLOBAL_STYLE} "
+        f"The video should convey the book's essence and make viewers want to read it. "
+        f"Do not depict any real person's identifiable face; use symbolic/abstract representations. "
+        f"No brand logos or trademarks."
+    )
 
-    # プロンプトテンプレート
-    prompt = f"""Create a professional book promotional video in {style_desc} style.
+    # シナリオをシーンに分割して構成
+    scenes = _split_scenario_into_scenes(summary, num_scenes, per_scene, book_name)
 
-Book Title: {book_name}
-Promotional Angle: {pattern_name}
+    # プロンプト組み立て
+    prompt_parts = [header] + scenes
 
-Video Concept:
-{summary}
+    return "\n".join(prompt_parts)
 
-Technical Requirements:
-- Style: {visual_style}
-- Composition: {composition}
-- Mood: Engaging, professional, emotionally compelling
-- Pacing: Dynamic with smooth transitions
-- Target: Attract potential readers and capture the essence of the book
 
-Visual Elements:
-- Opening shot that immediately captures attention
-- Visual metaphors related to the book's themes
-- Smooth camera movements (pans, zooms, dolly shots)
-- Professional color grading
-- Compelling visual storytelling
+def _split_scenario_into_scenes(
+    summary: str,
+    num_scenes: int,
+    per_scene: float,
+    book_name: str
+) -> List[str]:
+    """
+    シナリオを複数シーンに分割
 
-The video should feel like a high-end book trailer that makes viewers want to read the book immediately."""
+    Args:
+        summary: プロモーションシナリオ
+        num_scenes: シーン数
+        per_scene: 1シーンあたりの秒数
+        book_name: 書籍名
 
-    return prompt.strip()
+    Returns:
+        シーン記述のリスト
+    """
+    # シナリオを文に分割
+    sentences = [s.strip() for s in summary.replace('。', '。\n').split('\n') if s.strip()]
+
+    # シーンごとの文数を計算
+    sentences_per_scene = max(1, len(sentences) // num_scenes)
+
+    scenes = []
+
+    for i in range(num_scenes):
+        scene_num = i + 1
+        start_idx = i * sentences_per_scene
+        end_idx = start_idx + sentences_per_scene if i < num_scenes - 1 else len(sentences)
+
+        scene_text = ''.join(sentences[start_idx:end_idx])
+
+        # 最終シーンはタイトルカードを含める
+        if scene_num == num_scenes:
+            scene_desc = (
+                f"Scene {scene_num} (~{per_scene:.1f}s): {scene_text} "
+                f"Camera slowly pulls back to reveal the book cover or title card: 『{book_name}』. "
+                f"Fade to subtle call-to-action visual."
+            )
+        else:
+            scene_desc = (
+                f"Scene {scene_num} (~{per_scene:.1f}s): {scene_text} "
+                f"Smooth camera movement; visual metaphors representing the key theme."
+            )
+
+        scenes.append(scene_desc)
+
+    return scenes
 
 
 def create_simple_prompt(

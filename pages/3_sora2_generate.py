@@ -100,12 +100,23 @@ with st.container():
         help="詳細版: より具体的な指示でクオリティ向上 / シンプル版: 簡潔な指示"
     )
 
+    # 動画の長さを選択（先に選択させる）
+    duration = st.radio(
+        "動画の長さ",
+        [8, 10, 12],
+        index=1,
+        format_func=lambda x: f"{x}秒",
+        help="Sora2 APIで選択可能な長さは 8, 10, 12秒のみです",
+        horizontal=True
+    )
+
     # プロンプト生成
     if prompt_type == "詳細版（推奨）":
         sora_prompt = prompt_engineer.create_sora2_prompt(
             scenario=scenario,
             aspect_ratio=scenario.get('aspect_ratio', '16:9'),
-            visual_style=scenario.get('visual_style', 'Photorealistic')
+            visual_style=scenario.get('visual_style', 'Photorealistic'),
+            duration=duration
         )
     else:
         sora_prompt = prompt_engineer.create_simple_prompt(
@@ -126,27 +137,18 @@ with st.container():
 
 # 動画設定
 st.markdown("---")
-st.subheader("⚙️ 動画設定")
+st.subheader("⚙️ 生成設定サマリー")
 
-col1, col2 = st.columns(2)
+# durationはプロンプト生成時に選択済み
+video_duration = duration
 
-with col1:
-    video_duration = st.slider(
-        "動画の長さ（秒）",
-        min_value=5,
-        max_value=60,
-        value=10,
-        step=5,
-        help="Sora2で生成する動画の長さ"
-    )
-
-with col2:
-    st.info(f"""
-    **設定サマリー**
-    - アスペクト比: {scenario.get('aspect_ratio', '16:9')}
-    - スタイル: {scenario.get('visual_style', 'Photorealistic')}
-    - 長さ: {video_duration}秒
-    """)
+st.info(f"""
+**設定サマリー**
+- アスペクト比: {scenario.get('aspect_ratio', '16:9')}
+- ビジュアルスタイル: {scenario.get('visual_style', 'Photorealistic')}
+- 動画の長さ: {video_duration}秒
+- シーン数: {3 if video_duration <= 8 else 4 if video_duration <= 10 else 5}シーン
+""")
 
 # 動画生成
 st.markdown("---")
@@ -158,6 +160,7 @@ if 'generated_video' not in st.session_state:
     - OpenAIの最新動画生成AI
     - 高品質な動画を数分で生成
     - プロンプトから直接動画を作成
+    - シナリオを自動で複数シーンに分割
 
     **処理時間:** 約1-3分（動画の長さにより変動）
     """)

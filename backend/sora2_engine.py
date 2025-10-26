@@ -36,7 +36,8 @@ def generate_video(
     book_name: str,
     aspect_ratio: str = "16:9",
     duration: int = 10,
-    output_dir: Optional[Path] = None
+    output_dir: Optional[Path] = None,
+    model: str = "sora-2"
 ) -> Dict[str, Any]:
     """
     Sora2で動画を生成
@@ -45,8 +46,9 @@ def generate_video(
         prompt: 動画生成プロンプト
         book_name: 書籍名（ファイル名用）
         aspect_ratio: アスペクト比 ("16:9", "9:16", "1:1")
-        duration: 動画の長さ（秒）
+        duration: 動画の長さ（秒） - 8, 10, 12のみ指定可能
         output_dir: 出力ディレクトリ（Noneの場合は自動生成）
+        model: 使用モデル ("sora-2" or "sora-2-pro")
 
     Returns:
         生成結果の辞書
@@ -55,10 +57,19 @@ def generate_video(
             'prompt': str,
             'aspect_ratio': str,
             'duration': int,
-            'generation_id': str
+            'generation_id': str,
+            'status': 'success' | 'error',
+            'error': str (エラー時のみ)
         }
     """
     client = OpenAI(api_key=get_api_key())
+
+    # durationの検証（8, 10, 12のみ）
+    allowed_durations = [8, 10, 12]
+    if duration not in allowed_durations:
+        # 最も近い値を選択
+        duration = min(allowed_durations, key=lambda x: abs(x - duration))
+        print(f"⚠️ Duration adjusted to {duration}s (only 8, 10, 12 are allowed)")
 
     # 出力ディレクトリの準備
     if output_dir is None:
@@ -67,6 +78,14 @@ def generate_video(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # アスペクト比をサイズに変換
+    size_map = {
+        "16:9": "1792x1024",
+        "9:16": "1024x1792",
+        "1:1": "1024x1024"
+    }
+    size = size_map.get(aspect_ratio, "1024x1792")
+
     # ファイル名の準備
     safe_book_name = "".join(c for c in book_name if c.isalnum() or c in (' ', '-', '_')).strip()
     timestamp = int(time.time())
@@ -74,46 +93,42 @@ def generate_video(
     output_path = output_dir / output_filename
 
     try:
-        # Sora2 API呼び出し
-        # Note: 2025年1月時点でSora2 APIは限定プレビュー中
-        # 実際のAPI仕様に合わせて調整が必要
+        # Sora2 API呼び出し (create_and_poll で非同期生成+ポーリング)
+        print(f"🎬 Sora2で動画生成中... (model: {model}, size: {size}, duration: {duration}s)")
 
-        # OpenAI APIのSora2エンドポイント (正しいメソッド名)
-        response = client.video.generations.create(
-            model="sora-turbo-2024-12-20",
+        video = client.videos.create_and_poll(
+            model=model,
             prompt=prompt,
-            size=aspect_ratio,  # または "1920x1080" 形式
-            duration=duration
+            seconds=str(duration),  # "8", "10", "12"
+            size=size
         )
 
-        # 動画ファイルを保存
-        # APIレスポンスの形式に応じて調整
-        if hasattr(response, 'data'):
-            video_data = response.data
-        elif hasattr(response, 'url'):
-            # URLから動画をダウンロード
-            import requests
-            video_response = requests.get(response.url)
-            video_data = video_response.content
-        else:
-            video_data = response
+        print(f"✓ 動画生成完了 (Video ID: {video.id})")
 
-        with open(output_path, 'wb') as f:
-            f.write(video_data)
+        # 動画をダウンロード
+        print("📥 動画をダウンロード中...")
+        content = client.videos.download_content(video.id)
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "wb") as f:
+            for chunk in content.iter_bytes():
+                f.write(chunk)
+
+        print(f"✓ 保存完了: {output_path}")
 
         result = {
             'video_file': output_path,
             'prompt': prompt,
             'aspect_ratio': aspect_ratio,
             'duration': duration,
-            'generation_id': getattr(response, 'id', str(timestamp)),
+            'generation_id': video.id,
             'status': 'success'
         }
 
         return result
 
     except Exception as e:
-        # エラー時はダミー動画を返す（開発用）
+        # エラー時
         error_result = {
             'video_file': None,
             'prompt': prompt,
