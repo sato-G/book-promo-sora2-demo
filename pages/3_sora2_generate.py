@@ -179,6 +179,10 @@ if 'generated_video' not in st.session_state:
                 aspect_ratio = scenario.get('aspect_ratio', '16:9')
                 st.write(f"DEBUG: アスペクト比 = {aspect_ratio}, Duration = {video_duration}")
 
+                # プロンプトのプレビュー（最初の200文字）
+                with st.expander("🔍 送信するプロンプト（デバッグ用）"):
+                    st.text(st.session_state.sora_prompt[:500] + "..." if len(st.session_state.sora_prompt) > 500 else st.session_state.sora_prompt)
+
                 # Sora2で動画生成
                 result = sora2_engine.generate_video(
                     prompt=st.session_state.sora_prompt,
