@@ -214,16 +214,31 @@ def _split_scenario_into_scenes(
             scene_text = f"Scene {i+1} (~{per_scene:.1f}s): Smooth cinematic shot with professional composition."
 
         # ナレーションを追加（sample_sora.py形式）
-        # 各シーンのナレーションは50文字以内に制限（長すぎると404エラー）
+        # シーン時間に合わせてナレーション長を調整
+        # 計算: 日本語ナレーション約5文字/秒 × シーン秒数
         if has_narration and i < len(narration_parts) and narration_parts[i]:
             narration = narration_parts[i]
-            # 長すぎる場合は最初の50文字のみ使用
-            if len(narration) > 50:
-                # 句点で区切って最初の文だけ使用
-                first_sentence = narration.split('。')[0] + '。'
-                if len(first_sentence) > 50:
-                    first_sentence = narration[:47] + '...'
-                narration = first_sentence
+
+            # シーン時間に基づく最大文字数（余裕を持たせて少し多め）
+            max_chars_for_scene = int(per_scene * 6)  # 6文字/秒で少し余裕
+
+            # 長すぎる場合は調整
+            if len(narration) > max_chars_for_scene:
+                # 句点で区切って収まる範囲で
+                sentences_in_narration = [s.strip() + '。' for s in narration.split('。') if s.strip()]
+                truncated = ""
+                for sent in sentences_in_narration:
+                    if len(truncated) + len(sent) <= max_chars_for_scene:
+                        truncated += sent
+                    else:
+                        break
+
+                # 何も入らない場合は最初の文を強制的に短縮
+                if not truncated and sentences_in_narration:
+                    truncated = sentences_in_narration[0][:max_chars_for_scene-1] + '。'
+
+                narration = truncated if truncated else narration[:max_chars_for_scene]
+
             scene_text += f"\nVoice-over (Japanese): {narration}"
 
         scenes.append(scene_text)
