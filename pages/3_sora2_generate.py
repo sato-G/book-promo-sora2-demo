@@ -127,14 +127,11 @@ if total_parts == 1:
 else:
     total_video_time = duration * 2
 
-# 話せる文字数の目安（6文字/秒）
-max_narration_chars = int(total_video_time * 6)
-
 st.info(f"""
-💡 **ナレーションのコツ:**
+💡 **ナレーション編集:**
 - この動画の長さ: {total_video_time}秒
-- 話せる文字数の目安: 約{max_narration_chars}文字まで
-- 長すぎる場合は自動で調整されます（重要な部分を前半に書いてください）
+- 編集したシナリオがそのまま日本語ナレーションとして使われます
+- Sora2が自動で適切な映像を生成します
 """)
 
 # シナリオを取得
@@ -152,10 +149,7 @@ if total_parts == 1:
 
     # 文字数表示
     char_count = len(edited_scenario.replace('\n', '').replace(' ', ''))
-    if char_count > max_narration_chars:
-        st.warning(f"⚠️ 現在{char_count}文字（推奨{max_narration_chars}文字以内）- 超過分は自動調整されます")
-    else:
-        st.success(f"✅ {char_count}文字（推奨範囲内）")
+    st.info(f"📊 現在の文字数: {char_count}文字")
 
     st.session_state.edited_scenario = edited_scenario
     st.session_state.generation_mode = "single"
@@ -168,9 +162,6 @@ else:
     part1_default = ''.join(sentences[:mid_point])
     part2_default = ''.join(sentences[mid_point:])
 
-    # 各パートの推奨文字数
-    max_chars_per_part = int(duration * 6)
-
     st.markdown("#### Part 1 シナリオ（前半）")
     edited_scenario_part1 = st.text_area(
         "Part 1で話す内容",
@@ -179,10 +170,7 @@ else:
         key="scenario_part1"
     )
     char_count_p1 = len(edited_scenario_part1.replace('\n', '').replace(' ', ''))
-    if char_count_p1 > max_chars_per_part:
-        st.warning(f"⚠️ Part 1: {char_count_p1}文字（推奨{max_chars_per_part}文字以内）")
-    else:
-        st.success(f"✅ Part 1: {char_count_p1}文字")
+    st.info(f"📊 Part 1: {char_count_p1}文字")
 
     st.markdown("#### Part 2 シナリオ（後半）")
     edited_scenario_part2 = st.text_area(
@@ -192,10 +180,7 @@ else:
         key="scenario_part2"
     )
     char_count_p2 = len(edited_scenario_part2.replace('\n', '').replace(' ', ''))
-    if char_count_p2 > max_chars_per_part:
-        st.warning(f"⚠️ Part 2: {char_count_p2}文字（推奨{max_chars_per_part}文字以内）")
-    else:
-        st.success(f"✅ Part 2: {char_count_p2}文字")
+    st.info(f"📊 Part 2: {char_count_p2}文字")
 
     st.session_state.edited_scenario_part1 = edited_scenario_part1
     st.session_state.edited_scenario_part2 = edited_scenario_part2
