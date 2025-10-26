@@ -116,8 +116,9 @@ def generate_scenarios_from_summary(book_name: str, summary: str, target_audienc
    - 論文形式のような堅い表現
 
 4. **文字数: {pattern['length']}**
-   - 適切な段落分けで読みやすく
+   - **改行なし**: 1つの連続したテキストとして出力
    - 動画ナレーションとして自然な流れ
+   - 段落分けは不要（ナレーション用のため）
 
 5. **文体の例**
    - 「この本は〜」「あなたは〜」などの語りかけ

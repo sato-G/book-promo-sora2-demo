@@ -162,8 +162,11 @@ def _split_scenario_into_scenes(
     # 日本語シナリオをシーンごとに分割
     narration_parts = []
     if has_narration and summary:
+        # 改行を削除して連続したテキストにする
+        summary_cleaned = summary.replace('\n', '').replace('\r', '')
+
         # 文を分割
-        sentences = [s.strip() for s in summary.split('。') if s.strip()]
+        sentences = [s.strip() for s in summary_cleaned.split('。') if s.strip()]
         sentences_per_scene = max(1, len(sentences) // num_scenes)
 
         for i in range(num_scenes):
@@ -211,8 +214,17 @@ def _split_scenario_into_scenes(
             scene_text = f"Scene {i+1} (~{per_scene:.1f}s): Smooth cinematic shot with professional composition."
 
         # ナレーションを追加（sample_sora.py形式）
+        # 各シーンのナレーションは50文字以内に制限（長すぎると404エラー）
         if has_narration and i < len(narration_parts) and narration_parts[i]:
-            scene_text += f"\nVoice-over (Japanese): {narration_parts[i]}"
+            narration = narration_parts[i]
+            # 長すぎる場合は最初の50文字のみ使用
+            if len(narration) > 50:
+                # 句点で区切って最初の文だけ使用
+                first_sentence = narration.split('。')[0] + '。'
+                if len(first_sentence) > 50:
+                    first_sentence = narration[:47] + '...'
+                narration = first_sentence
+            scene_text += f"\nVoice-over (Japanese): {narration}"
 
         scenes.append(scene_text)
 

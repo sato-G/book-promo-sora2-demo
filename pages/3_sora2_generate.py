@@ -251,6 +251,10 @@ if 'generated_video' not in st.session_state:
                 try:
                     st.write(f"DEBUG: Part 1 - アスペクト比 = {aspect_ratio}, Duration = {video_duration}")
 
+                    # プロンプトデバッグ表示
+                    with st.expander("🔍 Part 1 プロンプト（デバッグ）"):
+                        st.text(prompt_part1[:1000] + "..." if len(prompt_part1) > 1000 else prompt_part1)
+
                     result_part1 = sora2_engine.generate_video(
                         prompt=prompt_part1,
                         book_name=scenario['book_name'],
