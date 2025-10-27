@@ -399,6 +399,13 @@ if 'scenes' in st.session_state and 'scene_videos' in st.session_state:
 
                         st.success("✅ 動画結合完了！")
                         st.balloons()
+                        st.session_state.current_step = 4
+                        st.info("➡️ 完成動画ページで確認できます")
+
+                        # 自動遷移ボタン
+                        if st.button("➡️ 完成動画を確認", type="primary", use_container_width=True):
+                            st.switch_page("pages/4_preview_download.py")
+
                         st.rerun()
 
                     except Exception as e:
@@ -453,7 +460,12 @@ if 'scenes' in st.session_state and 'scene_videos' in st.session_state:
                 st.markdown("---")
                 st.subheader("🚀 次のアクション")
 
-                col_a1, col_a2, col_a3 = st.columns(3)
+                col_a0, col_a1, col_a2, col_a3 = st.columns(4)
+
+                with col_a0:
+                    if st.button("✨ 完成動画を確認", type="primary", use_container_width=True):
+                        st.session_state.current_step = 4
+                        st.switch_page("pages/4_preview_download.py")
 
                 with col_a1:
                     if st.button("🔄 別の動画を生成", use_container_width=True):

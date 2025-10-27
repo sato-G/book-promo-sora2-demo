@@ -105,7 +105,8 @@ with st.sidebar:
     steps = [
         ("1️⃣ EPUBアップロード", "pages/1_upload_epub.py"),
         ("2️⃣ シナリオ選択", "pages/2_scenario_editor.py"),
-        ("3️⃣ Sora2動画生成", "pages/3_sora2_generate.py")
+        ("3️⃣ Sora2動画生成", "pages/3_sora2_generate.py"),
+        ("4️⃣ 完成動画", "pages/4_preview_download.py")
     ]
 
     current_step = st.session_state.get('current_step', 0)
