@@ -85,22 +85,36 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# シナリオ情報表示
-st.subheader("📖 選択されたシナリオ")
+# シナリオ情報表示と設定変更
+col_info, col_settings = st.columns([4, 1])
 
-col1, col2, col3 = st.columns(3)
+with col_info:
+    st.subheader("📖 選択されたシナリオ")
 
-with col1:
-    st.metric("書籍名", scenario['book_name'])
+    col1, col2, col3 = st.columns(3)
 
-with col2:
-    pattern_name = scenario.get('selected_pattern', {}).get('pattern_name', '不明')
-    st.metric("パターン", pattern_name)
+    with col1:
+        st.metric("書籍名", scenario['book_name'])
 
-with col3:
-    aspect_ratio = scenario.get('aspect_ratio', '16:9')
-    visual_style = scenario.get('visual_style', 'Photorealistic')
-    st.metric("設定", f"{aspect_ratio} / {visual_style}")
+    with col2:
+        pattern_name = scenario.get('selected_pattern', {}).get('pattern_name', '不明')
+        st.metric("パターン", pattern_name)
+
+    with col3:
+        aspect_ratio = scenario.get('aspect_ratio', '16:9')
+        visual_style = scenario.get('visual_style', 'Photorealistic')
+        st.metric("設定", f"{aspect_ratio} / {visual_style}")
+
+with col_settings:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("⚙️ 設定変更", use_container_width=True, help="シナリオ選択に戻る"):
+        # シーン関連データを削除してシナリオ選択に戻る
+        keys_to_delete = ['scenes', 'scene_videos', 'final_video']
+        for key in keys_to_delete:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.session_state.current_step = 2
+        st.switch_page("pages/2_scenario_editor.py")
 
 st.markdown("---")
 
@@ -134,7 +148,20 @@ if 'scenes' not in st.session_state:
 else:
     scenes = st.session_state.scenes
 
-    st.success(f"✅ {len(scenes)}シーンに分割済み")
+    col_status, col_regen = st.columns([3, 1])
+
+    with col_status:
+        st.success(f"✅ {len(scenes)}シーンに分割済み")
+
+    with col_regen:
+        if st.button("🔄 シーン分割をやり直す", use_container_width=True, help="新しくシーンを生成し直します"):
+            # 確認なしで即座に削除して再生成
+            del st.session_state.scenes
+            if 'scene_videos' in st.session_state:
+                del st.session_state.scene_videos
+            if 'final_video' in st.session_state:
+                del st.session_state.final_video
+            st.rerun()
 
     # シーン編集UI
     st.markdown("### 📝 シーン編集（ナレーション調整）")
@@ -168,14 +195,6 @@ else:
 
     # 編集されたシーンを保存
     st.session_state.scenes = edited_scenes
-
-    if st.button("🔄 シーン分割をやり直す"):
-        del st.session_state.scenes
-        if 'scene_videos' in st.session_state:
-            del st.session_state.scene_videos
-        if 'final_video' in st.session_state:
-            del st.session_state.final_video
-        st.rerun()
 
 # ========================================
 # Step 2: 各シーン生成
@@ -212,7 +231,17 @@ if 'scenes' in st.session_state:
             with col_action:
                 # シーンが既に生成済みかチェック
                 if scene_num in st.session_state.scene_videos:
-                    st.success("✅ 生成済み")
+                    col_status, col_regen_scene = st.columns(2)
+                    with col_status:
+                        st.success("✅ 生成済み")
+                    with col_regen_scene:
+                        if st.button("🔄", key=f"regen_scene_{scene_num}", help="このシーンを再生成"):
+                            # シーン動画を削除して再生成可能に
+                            del st.session_state.scene_videos[scene_num]
+                            # 最終動画も削除（再結合が必要）
+                            if 'final_video' in st.session_state:
+                                del st.session_state.final_video
+                            st.rerun()
                 else:
                     if st.button(f"▶️ シーン {scene_num} を生成", key=f"gen_scene_{scene_num}"):
                         with st.spinner(f"🎬 シーン {scene_num} を生成中... (1-3分)"):
