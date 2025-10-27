@@ -352,10 +352,14 @@ if 'scenes' in st.session_state and 'scene_videos' in st.session_state:
                         sorted_scene_nums = sorted(scene_videos.keys())
                         video_files = [Path(scene_videos[num]['video_file']) for num in sorted_scene_nums]
 
-                        # 結合実行
+                        # 結合実行（Streamlit Cloud対応: /tmpを使用）
+                        import tempfile
+                        temp_dir = Path(tempfile.gettempdir()) / "sora2_videos"
+                        temp_dir.mkdir(parents=True, exist_ok=True)
+
                         final_video_path = video_composer.concatenate_videos(
                             video_files,
-                            output_file=Path("data/internal/videos") / f"{scenario['book_name']}_final.mp4"
+                            output_file=temp_dir / f"{scenario['book_name']}_final.mp4"
                         )
 
                         # 最終動画を保存

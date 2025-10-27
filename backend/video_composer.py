@@ -9,6 +9,7 @@ moviepyを使用（Streamlit Cloud対応）
 from pathlib import Path
 from typing import List, Optional
 import time
+import tempfile
 
 try:
     from moviepy.editor import VideoFileClip, concatenate_videoclips
@@ -21,16 +22,14 @@ except ImportError:
 
 def concatenate_videos(
     video_files: List[Path],
-    output_file: Optional[Path] = None,
-    output_dir: Optional[Path] = None
+    output_file: Optional[Path] = None
 ) -> Path:
     """
-    複数の動画を結合して1つの動画にする
+    複数の動画を結合して1つの動画にする（Streamlit Cloud対応）
 
     Args:
         video_files: 結合する動画ファイルのリスト（順番通り）
-        output_file: 出力ファイルパス（指定しない場合は自動生成）
-        output_dir: 出力ディレクトリ（output_fileが指定されていない場合）
+        output_file: 出力ファイルパス（指定しない場合は/tmpに自動生成）
 
     Returns:
         結合された動画ファイルのパス
@@ -38,15 +37,17 @@ def concatenate_videos(
     if not video_files:
         raise ValueError("At least one video file is required")
 
-    # 出力パスの決定
+    # 出力パスの決定（Streamlit Cloud対応: /tmpを使用）
     if output_file is None:
-        if output_dir is None:
-            project_root = Path(__file__).parent.parent
-            output_dir = project_root / "data" / "output" / "sora2_videos"
-
-        output_dir.mkdir(parents=True, exist_ok=True)
+        # Streamlit Cloudでは/tmpディレクトリを使用
+        temp_dir = Path(tempfile.gettempdir()) / "sora2_videos"
+        temp_dir.mkdir(parents=True, exist_ok=True)
         timestamp = int(time.time())
-        output_file = output_dir / f"concatenated_{timestamp}.mp4"
+        output_file = temp_dir / f"concatenated_{timestamp}.mp4"
+    else:
+        # output_fileが指定されている場合も親ディレクトリを作成
+        output_file = Path(output_file)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
 
     # moviepyを優先的に使用（Streamlit Cloud対応）
     if MOVIEPY_AVAILABLE:
@@ -59,12 +60,15 @@ def concatenate_videos(
             # 結合
             final_clip = concatenate_videoclips(clips, method="compose")
 
+            # Streamlit Cloud対応: 一時ディレクトリに音声ファイルを出力
+            temp_audio = Path(tempfile.gettempdir()) / f"temp-audio-{int(time.time())}.m4a"
+
             # 出力
             final_clip.write_videofile(
                 str(output_file),
                 codec='libx264',
                 audio_codec='aac',
-                temp_audiofile='temp-audio.m4a',
+                temp_audiofile=str(temp_audio),
                 remove_temp=True,
                 logger=None  # ログ出力を抑制
             )
@@ -84,7 +88,9 @@ def concatenate_videos(
                 raise RuntimeError(f"moviepyとffmpeg両方が利用できません: {e}")
 
     # ffmpegを使用（フォールバック）
-    concat_list_file = output_file.parent / f"concat_list_{int(time.time())}.txt"
+    # Streamlit Cloud対応: /tmpに一時ファイルを作成
+    temp_dir = Path(tempfile.gettempdir())
+    concat_list_file = temp_dir / f"concat_list_{int(time.time())}.txt"
 
     try:
         import subprocess
