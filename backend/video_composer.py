@@ -16,8 +16,6 @@ try:
     MOVIEPY_AVAILABLE = True
 except ImportError:
     MOVIEPY_AVAILABLE = False
-    # フォールバック用
-    import subprocess
 
 
 def concatenate_videos(
@@ -70,7 +68,9 @@ def concatenate_videos(
                 audio_codec='aac',
                 temp_audiofile=str(temp_audio),
                 remove_temp=True,
-                logger=None  # ログ出力を抑制
+                logger=None,  # ログ出力を抑制
+                verbose=False,
+                threads=4
             )
 
             # クリーンアップ
@@ -82,77 +82,21 @@ def concatenate_videos(
             return output_file
 
         except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
             print(f"⚠️ moviepyでの結合に失敗: {e}")
-            # ffmpegにフォールバック
-            if not check_ffmpeg_available():
-                raise RuntimeError(f"moviepyとffmpeg両方が利用できません: {e}")
+            print(f"詳細:\n{error_details}")
+            # moviepyが失敗した場合はエラーを上げる（Streamlit Cloudはffmpegなし）
+            raise RuntimeError(
+                f"moviepyでの動画結合に失敗しました。\n\n"
+                f"エラー: {e}\n\n"
+                f"詳細:\n{error_details}\n\n"
+                f"Streamlit Cloudではffmpegが利用できないため、moviepyのインストールとImageMagickの設定を確認してください。"
+            )
 
-    # ffmpegを使用（フォールバック）
-    # Streamlit Cloud対応: /tmpに一時ファイルを作成
-    temp_dir = Path(tempfile.gettempdir())
-    concat_list_file = temp_dir / f"concat_list_{int(time.time())}.txt"
-
-    try:
-        import subprocess
-        # concat用のリストファイルを作成
-        with open(concat_list_file, 'w') as f:
-            for video_file in video_files:
-                # ffmpegのconcat形式: file 'path'
-                f.write(f"file '{video_file.absolute()}'\n")
-
-        # ffmpegで結合
-        cmd = [
-            'ffmpeg',
-            '-f', 'concat',
-            '-safe', '0',
-            '-i', str(concat_list_file),
-            '-c', 'copy',  # 再エンコードなし（高速）
-            '-y',  # 上書き確認なし
-            str(output_file)
-        ]
-
-        print(f"🎬 動画を結合中... ({len(video_files)}個のファイル)")
-        result = subprocess.run(cmd, capture_output=True, text=True)
-
-        if result.returncode != 0:
-            # 再エンコード方式で再試行（codec互換性の問題対策）
-            print("⚠️ コピーモードで失敗、再エンコードで再試行...")
-            cmd = [
-                'ffmpeg',
-                '-f', 'concat',
-                '-safe', '0',
-                '-i', str(concat_list_file),
-                '-c:v', 'libx264',  # H.264で再エンコード
-                '-preset', 'fast',
-                '-crf', '23',
-                '-c:a', 'aac',
-                '-y',
-                str(output_file)
-            ]
-
-            result = subprocess.run(cmd, capture_output=True, text=True)
-
-            if result.returncode != 0:
-                raise RuntimeError(f"ffmpeg failed: {result.stderr}")
-
-        print(f"✓ 結合完了: {output_file}")
-        return output_file
-
-    finally:
-        # 一時ファイルを削除
-        if concat_list_file.exists():
-            concat_list_file.unlink()
-
-
-def check_ffmpeg_available() -> bool:
-    """
-    ffmpegが利用可能かチェック
-
-    Returns:
-        ffmpegが使用可能な場合True
-    """
-    try:
-        result = subprocess.run(['ffmpeg', '-version'], capture_output=True)
-        return result.returncode == 0
-    except FileNotFoundError:
-        return False
+    # moviepyが利用できない場合
+    raise RuntimeError(
+        "moviepyがインストールされていません。\n"
+        "requirements.txtにmovie==1.0.3を追加してください。\n"
+        "Streamlit Cloudではffmpegが利用できないため、moviepyが必須です。"
+    )
