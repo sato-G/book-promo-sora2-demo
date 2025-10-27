@@ -14,8 +14,10 @@ import tempfile
 try:
     from moviepy.editor import VideoFileClip, concatenate_videoclips
     MOVIEPY_AVAILABLE = True
-except ImportError:
+    print("✓ moviepy imported successfully")
+except ImportError as e:
     MOVIEPY_AVAILABLE = False
+    print(f"⚠️ moviepy import failed: {e}")
 
 
 def concatenate_videos(
@@ -95,8 +97,14 @@ def concatenate_videos(
             )
 
     # moviepyが利用できない場合
+    import sys
     raise RuntimeError(
-        "moviepyがインストールされていません。\n"
-        "requirements.txtにmovie==1.0.3を追加してください。\n"
-        "Streamlit Cloudではffmpegが利用できないため、moviepyが必須です。"
+        "moviepyがインストールされていません。\n\n"
+        "対処方法:\n"
+        "1. requirements.txtにmoviepy>=1.0.3があることを確認\n"
+        "2. Streamlit Cloudでアプリを再起動\n"
+        "3. pip install moviepy を実行\n\n"
+        f"Python version: {sys.version}\n"
+        f"Available packages: moviepy が見つかりません\n\n"
+        "注: Streamlit Cloudではffmpegが利用できないため、moviepyが必須です。"
     )

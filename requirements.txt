@@ -15,6 +15,10 @@ Pillow>=10.0.0
 
 # Video Processing
 moviepy>=1.0.3
+imageio>=2.25.0
+imageio-ffmpeg>=0.4.8
+proglog>=0.1.10
+decorator>=4.4.2
 
 # Utilities
 python-dotenv>=1.0.0
