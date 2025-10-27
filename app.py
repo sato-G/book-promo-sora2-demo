@@ -19,6 +19,12 @@ st.set_page_config(
 # カスタムCSS
 st.markdown("""
 <style>
+:root {
+    --primary-color: #8B5CF6;
+    --secondary-color: #06B6D4;
+    --success-color: #10B981;
+}
+
 .main-title {
     text-align: center;
     padding: 3rem 2rem;
@@ -58,6 +64,26 @@ st.markdown("""
     font-size: 0.9rem;
     font-weight: bold;
 }
+
+.step-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    margin: 0.25rem;
+    border-radius: 2rem;
+    background: #f0f0f0;
+    font-size: 0.9rem;
+}
+
+.step-badge.completed {
+    background: #10B981;
+    color: white;
+}
+
+.step-badge.current {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: bold;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -73,39 +99,99 @@ st.markdown("""
 
 # サイドバー
 with st.sidebar:
-    st.header("📖 使い方")
-    st.markdown("""
-    ### ワークフロー
+    st.header("📍 ナビゲーション")
 
-    1. **EPUBアップロード**
-       書籍ファイルをアップロード
+    # ステップ表示
+    steps = [
+        ("1️⃣ EPUBアップロード", "pages/1_upload_epub.py"),
+        ("2️⃣ シナリオ選択", "pages/2_scenario_editor.py"),
+        ("3️⃣ Sora2動画生成", "pages/3_sora2_generate.py")
+    ]
 
-    2. **シナリオ選択**
-       複数パターンから選択
+    current_step = st.session_state.get('current_step', 0)
 
-    3. **Sora2生成**
-       一撃で動画を生成！
-
-    ---
-
-    ### 💡 Sora2版の特徴
-
-    - ⚡ 超高速（1-3分）
-    - 🎬 高品質な動画
-    - ✨ シンプルな操作
-
-    ---
-
-    ### ⚠️ 注意事項
-
-    Sora2 APIが必要です
-    """)
+    for i, (label, page) in enumerate(steps, 1):
+        if i == current_step:
+            st.markdown(f'<div class="step-badge current">{label}</div>', unsafe_allow_html=True)
+        elif i < current_step:
+            st.markdown(f'<div class="step-badge completed">{label}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="step-badge">{label}</div>', unsafe_allow_html=True)
 
     st.markdown("---")
 
-    # セッション状態表示
-    if 'current_step' in st.session_state:
-        st.info(f"現在: Step {st.session_state.current_step + 1}")
+    # デバッグ情報
+    with st.expander("🔧 デバッグ情報"):
+        st.write("現在のステップ:", current_step)
+        st.write("EPUB:", "✅" if st.session_state.get('uploaded_epub') else "❌")
+        st.write("書籍分析:", "✅" if st.session_state.get('book_analysis') else "❌")
+        st.write("シナリオ選択:", "✅" if st.session_state.get('selected_scenario') else "❌")
+        st.write("生成済み動画:", "✅" if st.session_state.get('generated_video') else "❌")
+
+    st.markdown("---")
+
+    # セッション復元機能
+    with st.expander("📂 セッション復元"):
+        st.caption("過去に生成した動画を復元できます")
+
+        # backend読み込み
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent))
+        from backend import session_manager
+
+        # 利用可能なセッション一覧
+        sessions = session_manager.get_saved_sessions()
+        if sessions:
+            # 書籍名を抽出
+            book_names = set()
+            for session_path in sessions:
+                filename = session_path.name
+                if 'latest' in filename:
+                    book_name = filename.replace('session_', '').replace('_latest.json', '')
+                    book_names.add(book_name)
+
+            if book_names:
+                selected_book = st.selectbox(
+                    "書籍を選択",
+                    sorted(book_names),
+                    key="restore_book_select"
+                )
+
+                if st.button("🔄 このセッションを復元", use_container_width=True):
+                    session_data = session_manager.load_session_state(selected_book, use_latest=True)
+                    if session_data:
+                        # session_stateに復元
+                        if 'scenario' in session_data:
+                            st.session_state.selected_scenario = session_data['scenario']
+                        if 'generated_video' in session_data:
+                            st.session_state.generated_video = session_data['generated_video']
+                        if 'generation_mode' in session_data:
+                            st.session_state.generation_mode = session_data['generation_mode']
+                        if 'edited_scenario' in session_data:
+                            st.session_state.edited_scenario = session_data['edited_scenario']
+                        if 'edited_scenario_part1' in session_data:
+                            st.session_state.edited_scenario_part1 = session_data['edited_scenario_part1']
+                        if 'edited_scenario_part2' in session_data:
+                            st.session_state.edited_scenario_part2 = session_data['edited_scenario_part2']
+
+                        st.session_state.current_step = 3  # Sora2生成ページへ
+
+                        st.success(f"✅ セッション復元完了: {selected_book}")
+                        st.info("Sora2生成ページから確認できます")
+                        st.rerun()
+                    else:
+                        st.error("セッションの読み込みに失敗しました")
+            else:
+                st.info("復元可能なセッションがありません")
+        else:
+            st.info("保存されたセッションがありません")
+
+    st.markdown("---")
+
+    if st.button("🔄 すべてリセット"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
 
 # メインコンテンツ
 col1, col2 = st.columns([2, 1])
