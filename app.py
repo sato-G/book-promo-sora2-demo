@@ -163,6 +163,30 @@ with st.sidebar:
                         # session_stateに復元
                         if 'scenario' in session_data:
                             st.session_state.selected_scenario = session_data['scenario']
+
+                        # シーンベース生成の復元
+                        if 'scenes' in session_data:
+                            st.session_state.scenes = session_data['scenes']
+
+                        if 'scene_videos' in session_data:
+                            # video_fileパスをPathオブジェクトに変換
+                            scene_videos_restored = {}
+                            for scene_num, video_data in session_data['scene_videos'].items():
+                                scene_videos_restored[int(scene_num)] = {
+                                    'video_file': Path(video_data['video_file']),
+                                    'generation_id': video_data.get('generation_id'),
+                                    'prompt': video_data.get('prompt'),
+                                    'status': 'success'
+                                }
+                            st.session_state.scene_videos = scene_videos_restored
+
+                        if 'final_video' in session_data:
+                            st.session_state.final_video = {
+                                'video_file': Path(session_data['final_video']['video_file']),
+                                'duration': session_data['final_video'].get('duration', 36)
+                            }
+
+                        # 旧形式の復元（2パート生成）
                         if 'generated_video' in session_data:
                             st.session_state.generated_video = session_data['generated_video']
                         if 'generation_mode' in session_data:

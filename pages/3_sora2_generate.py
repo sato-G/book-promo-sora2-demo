@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Page 3: Sora2動画生成
+Page 3: Sora2動画生成（シーンベース版）
 
-シナリオをもとにSora2で動画を一撃生成
+シナリオを3シーンに分割 → 各シーン個別生成 → 結合
+test_scene_flow.pyの成功パターンを厳密に再現
 """
 
 import streamlit as st
@@ -11,7 +12,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backend import sora2_engine, prompt_engineer, video_composer, session_manager
+from backend import sora2_engine, prompt_engineer, video_composer, session_manager, scene_splitter_sora2
 
 st.set_page_config(
     page_title="3️⃣ Sora2動画生成",
@@ -30,24 +31,24 @@ st.markdown("""
     border-radius: 1rem;
     margin-bottom: 2rem;
 }
-.prompt-card {
+.scene-card {
     background: #f8f9fa;
     padding: 1.5rem;
     border-radius: 1rem;
     border-left: 4px solid #667eea;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
 }
-.video-card {
-    background: white;
-    padding: 2rem;
-    border-radius: 1rem;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    margin-top: 2rem;
+.warning-box {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
 }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="main-header"><h1>🎬 Step 3: Sora2動画生成</h1><p>AIが一撃で動画を生成します</p></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header"><h1>🎬 Step 3: Sora2動画生成</h1><p>3シーン構成で高品質プロモーション動画を作成</p></div>', unsafe_allow_html=True)
 
 # サイドバー
 with st.sidebar:
@@ -62,59 +63,6 @@ with st.sidebar:
         st.session_state.current_step = 2
         st.switch_page("pages/2_scenario_editor.py")
 
-    # セッション復元UI
-    st.markdown("---")
-    st.header("💾 セッション管理")
-
-    # 保存済みセッション一覧
-    saved_sessions = session_manager.get_saved_sessions()
-    if saved_sessions:
-        st.info(f"📂 保存済み: {len(saved_sessions)}件")
-
-        # 最新5件を表示
-        for session_file in saved_sessions[:5]:
-            # ファイル名から書籍名と日時を抽出
-            filename = session_file.stem
-            # session_{book_name}_{timestamp}.json or session_{book_name}_latest.json
-            if '_latest' in filename:
-                book_name = filename.replace('session_', '').replace('_latest', '')
-                label = f"📕 {book_name} (最新)"
-            else:
-                parts = filename.replace('session_', '').split('_')
-                if len(parts) >= 3:
-                    book_name = '_'.join(parts[:-2])
-                    timestamp = f"{parts[-2]}_{parts[-1]}"
-                    label = f"📕 {book_name} ({timestamp})"
-                else:
-                    label = filename
-
-            if st.button(f"復元: {label}", key=f"restore_{session_file.name}"):
-                try:
-                    session_data = session_manager.load_session_state(book_name, use_latest=True)
-                    if session_data:
-                        # セッション状態を復元
-                        if 'scenario' in session_data:
-                            st.session_state.selected_scenario = session_data['scenario']
-                        if 'generated_video' in session_data:
-                            st.session_state.generated_video = session_data['generated_video']
-                        if 'generation_mode' in session_data:
-                            st.session_state.generation_mode = session_data['generation_mode']
-                        if 'edited_scenario' in session_data:
-                            st.session_state.edited_scenario = session_data['edited_scenario']
-                        if 'edited_scenario_part1' in session_data:
-                            st.session_state.edited_scenario_part1 = session_data['edited_scenario_part1']
-                        if 'edited_scenario_part2' in session_data:
-                            st.session_state.edited_scenario_part2 = session_data['edited_scenario_part2']
-
-                        st.success(f"✅ セッション復元: {book_name}")
-                        st.rerun()
-                    else:
-                        st.error("❌ セッションファイルが見つかりません")
-                except Exception as e:
-                    st.error(f"❌ 復元エラー: {str(e)}")
-    else:
-        st.info("💡 まだセッションがありません")
-
 # セッション状態チェック
 if 'selected_scenario' not in st.session_state:
     st.warning("⚠️ 先にシナリオを選択してください")
@@ -123,6 +71,19 @@ if 'selected_scenario' not in st.session_state:
     st.stop()
 
 scenario = st.session_state.selected_scenario
+
+# コンテンツ制限警告
+st.markdown("""
+<div class="warning-box">
+<h4>⚠️ Sora2 コンテンツ制限について</h4>
+<ul>
+<li>実在人物名は使用できません（公人・一般人問わず）</li>
+<li>著作権キャラクター・音楽は使用できません</li>
+<li>18歳以上向けコンテンツは使用できません</li>
+<li>実在人物が登場する場合は自動的に代名詞に置き換えられます</li>
+</ul>
+</div>
+""", unsafe_allow_html=True)
 
 # シナリオ情報表示
 st.subheader("📖 選択されたシナリオ")
@@ -141,442 +102,361 @@ with col3:
     visual_style = scenario.get('visual_style', 'Photorealistic')
     st.metric("設定", f"{aspect_ratio} / {visual_style}")
 
-# プロンプト生成
 st.markdown("---")
-st.subheader("✨ Sora2プロンプト生成")
 
-# 生成モード選択
-generation_mode = st.radio(
-    "生成モード",
-    ["シングル（最大12秒）", "2パート結合（最大24秒）"],
-    help="2パート結合: 12秒×2本を生成して結合します",
-    key="generation_mode_selector"
-)
+# ========================================
+# Step 1: シーン分割
+# ========================================
+st.subheader("🎬 Step 1: シーン分割")
 
-# 動画の長さを選択
-if generation_mode == "シングル（最大12秒）":
-    duration = st.radio(
-        "動画の長さ",
-        [4, 8, 12],
-        index=2,
-        format_func=lambda x: f"{x}秒",
-        help="Sora2 APIで選択可能な長さは 4, 8, 12秒のみです",
-        horizontal=True
-    )
-    total_parts = 1
-else:
-    st.info("📹 2パートモード: 12秒の動画を2本生成して結合します（合計24秒）")
-    duration = 12
-    total_parts = 2
-
-# シナリオ編集（日本語）
-st.markdown("---")
-st.subheader("📝 シナリオ編集")
-st.markdown("動画で話す内容を編集できます。この内容がSora2の音声ナレーションになります。")
-
-# ナレーション時間の計算
-if total_parts == 1:
-    total_video_time = duration
-else:
-    total_video_time = duration * 2
-
-st.info(f"""
-💡 **ナレーション編集:**
-- この動画の長さ: {total_video_time}秒
-- 編集したシナリオがそのまま日本語ナレーションとして使われます
-- Sora2が自動で適切な映像を生成します
-""")
-
-# シナリオを取得
-original_summary = scenario.get('selected_pattern', {}).get('summary', '')
-
-if total_parts == 1:
-    # シングルモード: 1つのシナリオ
-    edited_scenario = st.text_area(
-        "シナリオ（編集可能）",
-        value=original_summary,
-        height=300,
-        help="このシナリオが動画のナレーションとして使われます",
-        key="scenario_single"
-    )
-
-    # 文字数表示
-    char_count = len(edited_scenario.replace('\n', '').replace(' ', ''))
-    st.info(f"📊 現在の文字数: {char_count}文字")
-
-    st.session_state.edited_scenario = edited_scenario
-    st.session_state.generation_mode = "single"
-else:
-    # 2パートモード: シナリオを2分割
-    # 文を分割
-    sentences = [s.strip() + '。' for s in original_summary.split('。') if s.strip()]
-    mid_point = len(sentences) // 2
-
-    part1_default = ''.join(sentences[:mid_point])
-    part2_default = ''.join(sentences[mid_point:])
-
-    st.markdown("#### Part 1 シナリオ（前半）")
-    edited_scenario_part1 = st.text_area(
-        "Part 1で話す内容",
-        value=part1_default,
-        height=200,
-        key="scenario_part1"
-    )
-    char_count_p1 = len(edited_scenario_part1.replace('\n', '').replace(' ', ''))
-    st.info(f"📊 Part 1: {char_count_p1}文字")
-
-    st.markdown("#### Part 2 シナリオ（後半）")
-    edited_scenario_part2 = st.text_area(
-        "Part 2で話す内容",
-        value=part2_default,
-        height=200,
-        key="scenario_part2"
-    )
-    char_count_p2 = len(edited_scenario_part2.replace('\n', '').replace(' ', ''))
-    st.info(f"📊 Part 2: {char_count_p2}文字")
-
-    st.session_state.edited_scenario_part1 = edited_scenario_part1
-    st.session_state.edited_scenario_part2 = edited_scenario_part2
-    st.session_state.generation_mode = "two_part"
-
-# 動画設定
-st.markdown("---")
-st.subheader("⚙️ 生成設定サマリー")
-
-# durationはプロンプト生成時に選択済み
-video_duration = duration
-
-# シーン数計算
-if video_duration <= 4:
-    num_scenes = 2
-elif video_duration <= 8:
-    num_scenes = 3
-else:
-    num_scenes = 4
-
-# 総尺の計算
-if st.session_state.get('generation_mode') == 'two_part':
-    total_duration = video_duration * 2
-    display_duration = f"{video_duration}秒 × 2パート = {total_duration}秒"
-else:
-    total_duration = video_duration
-    display_duration = f"{video_duration}秒"
-
-st.info(f"""
-**設定サマリー**
-- モード: {generation_mode}
-- アスペクト比: {scenario.get('aspect_ratio', '16:9')}
-- ビジュアルスタイル: {scenario.get('visual_style', 'Photorealistic')}
-- 動画の長さ: {display_duration}
-- シーン数: {num_scenes}シーン/パート
-""")
-
-# 動画生成
-st.markdown("---")
-st.subheader("🎬 動画生成")
-
-if 'generated_video' not in st.session_state:
-    st.markdown("""
-    **Sora2について:**
-    - OpenAIの最新動画生成AI
-    - 高品質な動画を数分で生成
-    - プロンプトから直接動画を作成
-    - シナリオを自動で複数シーンに分割
-
-    **処理時間:** 約1-3分（動画の長さにより変動）
+if 'scenes' not in st.session_state:
+    st.info("""
+    💡 **シーン分割について**
+    - AIが自動的にシナリオを3シーン（各12秒）に分割します
+    - 各シーンのナレーションは40-50文字に最適化されます
+    - シーン1,2は続きを予感させる構成、シーン3で完結します
     """)
 
-    if st.button("🚀 Sora2で動画生成", type="primary", use_container_width=True):
-        aspect_ratio = scenario.get('aspect_ratio', '16:9')
+    if st.button("🤖 シーンに分割", type="primary", use_container_width=True):
+        with st.spinner("🤖 Gemini APIでシーン分割中..."):
+            try:
+                scenes = scene_splitter_sora2.split_into_scenes_for_sora2(
+                    scenario=scenario,
+                    num_scenes=3,
+                    chars_per_scene=45  # 40-50文字推奨
+                )
+                st.session_state.scenes = scenes
+                st.success("✅ シーン分割完了！")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ シーン分割エラー: {str(e)}")
+                st.exception(e)
+else:
+    scenes = st.session_state.scenes
 
-        # プロンプトを生成（裏側で実行）
-        if st.session_state.get('generation_mode') == 'two_part':
-            # 2パート用プロンプト生成
-            prompt_part1 = prompt_engineer.create_sora2_prompt(
-                scenario=scenario,
-                aspect_ratio=aspect_ratio,
-                visual_style=scenario.get('visual_style', 'Photorealistic'),
-                duration=video_duration,
-                part=1,
-                total_parts=2,
-                narration_text=st.session_state.get('edited_scenario_part1', '')
+    st.success(f"✅ {len(scenes)}シーンに分割済み")
+
+    # シーン編集UI
+    st.markdown("### 📝 シーン編集（ナレーション調整）")
+    st.caption("各シーンのナレーションを編集できます（40-50文字推奨）")
+
+    edited_scenes = []
+
+    for i, scene in enumerate(scenes):
+        with st.expander(f"**シーン {scene['scene_number']}** ({len(scene['narration'])}文字)", expanded=False):
+            edited_narration = st.text_area(
+                f"ナレーション (シーン {scene['scene_number']})",
+                value=scene['narration'],
+                height=100,
+                key=f"narration_{i}"
             )
-            prompt_part2 = prompt_engineer.create_sora2_prompt(
-                scenario=scenario,
-                aspect_ratio=aspect_ratio,
-                visual_style=scenario.get('visual_style', 'Photorealistic'),
-                duration=video_duration,
-                part=2,
-                total_parts=2,
-                narration_text=st.session_state.get('edited_scenario_part2', '')
-            )
-        else:
-            # シングル用プロンプト生成
-            single_prompt = prompt_engineer.create_sora2_prompt(
-                scenario=scenario,
-                aspect_ratio=aspect_ratio,
-                visual_style=scenario.get('visual_style', 'Photorealistic'),
-                duration=video_duration,
-                narration_text=st.session_state.get('edited_scenario', '')
-            )
 
-        if st.session_state.get('generation_mode') == 'two_part':
-            # 2パートモード
-            with st.spinner("🎬 Part 1を生成中... (12秒)"):
-                try:
-                    st.write(f"DEBUG: Part 1 - アスペクト比 = {aspect_ratio}, Duration = {video_duration}")
+            char_count = len(edited_narration)
 
-                    # プロンプトデバッグ表示
-                    with st.expander("🔍 Part 1 プロンプト（デバッグ）"):
-                        st.text(prompt_part1[:1000] + "..." if len(prompt_part1) > 1000 else prompt_part1)
+            if char_count < 40:
+                st.warning(f"⚠️ {char_count}文字 - 短すぎます（推奨: 40-50文字）")
+            elif char_count > 50:
+                st.warning(f"⚠️ {char_count}文字 - 長すぎます（推奨: 40-50文字）")
+            else:
+                st.success(f"✅ {char_count}文字 - 適切です")
 
-                    result_part1 = sora2_engine.generate_video(
-                        prompt=prompt_part1,
-                        book_name=scenario['book_name'],
-                        aspect_ratio=aspect_ratio,
-                        duration=video_duration
-                    )
+            edited_scenes.append({
+                'scene_number': scene['scene_number'],
+                'narration': edited_narration,
+                'duration_seconds': 12
+            })
 
-                    if result_part1['status'] != 'success':
-                        st.error(f"❌ Part 1生成エラー: {result_part1.get('error', '不明なエラー')}")
-                        st.stop()
+    # 編集されたシーンを保存
+    st.session_state.scenes = edited_scenes
 
-                    st.success("✅ Part 1完了！")
+    if st.button("🔄 シーン分割をやり直す"):
+        del st.session_state.scenes
+        if 'scene_videos' in st.session_state:
+            del st.session_state.scene_videos
+        if 'final_video' in st.session_state:
+            del st.session_state.final_video
+        st.rerun()
 
-                except Exception as e:
-                    st.error(f"❌ Part 1エラー: {str(e)}")
-                    st.exception(e)
-                    st.stop()
+# ========================================
+# Step 2: 各シーン生成
+# ========================================
+if 'scenes' in st.session_state:
+    st.markdown("---")
+    st.subheader("🎥 Step 2: 各シーン動画生成")
 
-            with st.spinner("🎬 Part 2を生成中... (12秒)"):
-                try:
-                    st.write(f"DEBUG: Part 2 - アスペクト比 = {aspect_ratio}, Duration = {video_duration}")
+    scenes = st.session_state.scenes
 
-                    result_part2 = sora2_engine.generate_video(
-                        prompt=prompt_part2,
-                        book_name=scenario['book_name'],
-                        aspect_ratio=aspect_ratio,
-                        duration=video_duration
-                    )
+    # シーン動画の保存先を初期化
+    if 'scene_videos' not in st.session_state:
+        st.session_state.scene_videos = {}
 
-                    if result_part2['status'] != 'success':
-                        st.error(f"❌ Part 2生成エラー: {result_part2.get('error', '不明なエラー')}")
-                        st.stop()
+    st.info("""
+    💡 **動画生成について**
+    - 各シーンを個別に生成します（各12秒）
+    - 合計生成時間: 36秒
+    - 生成には1シーンあたり1-3分かかります
+    """)
 
-                    st.success("✅ Part 2完了！")
+    # 各シーンの生成ボタンとプレビュー
+    for i, scene in enumerate(scenes):
+        scene_num = scene['scene_number']
 
-                except Exception as e:
-                    st.error(f"❌ Part 2エラー: {str(e)}")
-                    st.exception(e)
-                    st.stop()
+        with st.container():
+            st.markdown(f"#### 🎬 シーン {scene_num}")
 
-            # 動画を結合
-            with st.spinner("🔗 動画を結合中..."):
-                try:
-                    video_files = [result_part1['video_file'], result_part2['video_file']]
-                    concatenated_file = video_composer.concatenate_videos(video_files)
+            col_info, col_action = st.columns([3, 1])
 
-                    # 結合結果を保存
-                    final_result = {
-                        'video_file': concatenated_file,
-                        'prompt': f"Part 1:\n{prompt_part1[:500]}...\n\nPart 2:\n{prompt_part2[:500]}...",
-                        'aspect_ratio': aspect_ratio,
-                        'duration': total_duration,
-                        'generation_id': f"{result_part1['generation_id']}+{result_part2['generation_id']}",
-                        'status': 'success',
-                        'parts': [result_part1, result_part2]
-                    }
+            with col_info:
+                st.caption(f"ナレーション: {scene['narration']} ({len(scene['narration'])}文字)")
 
-                    st.session_state.generated_video = final_result
+            with col_action:
+                # シーンが既に生成済みかチェック
+                if scene_num in st.session_state.scene_videos:
+                    st.success("✅ 生成済み")
+                else:
+                    if st.button(f"▶️ シーン {scene_num} を生成", key=f"gen_scene_{scene_num}"):
+                        with st.spinner(f"🎬 シーン {scene_num} を生成中... (1-3分)"):
+                            try:
+                                # test_scene_flow.pyの成功パターンを使用
+                                prompt = prompt_engineer.create_scene_prompt_for_sora2(
+                                    book_name=scenario['book_name'],
+                                    scene_narration=scene['narration'],
+                                    visual_style=scenario.get('visual_style', 'Photorealistic'),
+                                    aspect_ratio=scenario.get('aspect_ratio', '16:9'),
+                                    duration=12,
+                                    scene_number=scene_num,
+                                    total_scenes=len(scenes)
+                                )
 
-                    # セッション保存
+                                # デバッグ表示
+                                with st.expander(f"🔍 シーン {scene_num} プロンプト"):
+                                    st.code(prompt)
+
+                                # Sora2で生成
+                                result = sora2_engine.generate_video(
+                                    prompt=prompt,
+                                    book_name=f"{scenario['book_name']}_scene{scene_num}",
+                                    aspect_ratio=scenario.get('aspect_ratio', '16:9'),
+                                    duration=12
+                                )
+
+                                if result['status'] == 'success':
+                                    # 生成結果を保存
+                                    st.session_state.scene_videos[scene_num] = result
+
+                                    # セッション保存（途中経過）
+                                    try:
+                                        session_data = {
+                                            'book_name': scenario['book_name'],
+                                            'scenario': scenario,
+                                            'scenes': scenes,
+                                            'scene_videos': {
+                                                k: {
+                                                    'video_file': str(v['video_file']),
+                                                    'generation_id': v.get('generation_id'),
+                                                    'prompt': v.get('prompt')
+                                                } for k, v in st.session_state.scene_videos.items()
+                                            },
+                                            'generation_mode': 'scene_based'
+                                        }
+                                        session_manager.save_session_state(session_data, scenario['book_name'])
+                                    except Exception as e:
+                                        st.warning(f"⚠️ セッション保存エラー: {str(e)}")
+
+                                    st.success(f"✅ シーン {scene_num} 生成完了！")
+                                    st.balloons()
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ シーン {scene_num} 生成エラー: {result.get('error', '不明なエラー')}")
+
+                            except Exception as e:
+                                st.error(f"❌ シーン {scene_num} エラー: {str(e)}")
+                                st.exception(e)
+
+            # 生成済みの場合はプレビュー表示
+            if scene_num in st.session_state.scene_videos:
+                video_result = st.session_state.scene_videos[scene_num]
+
+                if video_result.get('video_file') and Path(video_result['video_file']).exists():
+                    video_path = Path(video_result['video_file'])
+
+                    col_preview, col_download = st.columns([2, 1])
+
+                    with col_preview:
+                        st.video(str(video_path))
+
+                    with col_download:
+                        file_size_mb = video_path.stat().st_size / (1024 * 1024)
+                        st.caption(f"📊 {file_size_mb:.2f} MB")
+
+                        with open(video_path, 'rb') as f:
+                            st.download_button(
+                                "📥 DL",
+                                data=f.read(),
+                                file_name=f"scene_{scene_num}_{scenario['book_name']}.mp4",
+                                mime="video/mp4",
+                                use_container_width=True,
+                                key=f"dl_scene_{scene_num}"
+                            )
+                else:
+                    st.warning("⚠️ 動画ファイルが見つかりません")
+
+        st.markdown("---")
+
+# ========================================
+# Step 3: 最終結合
+# ========================================
+if 'scenes' in st.session_state and 'scene_videos' in st.session_state:
+    scenes = st.session_state.scenes
+    scene_videos = st.session_state.scene_videos
+
+    # 全シーンが生成済みかチェック
+    all_scenes_ready = all(scene['scene_number'] in scene_videos for scene in scenes)
+
+    if all_scenes_ready:
+        st.subheader("🎬 Step 3: 最終結合")
+
+        if 'final_video' not in st.session_state:
+            st.info("""
+            💡 **最終結合について**
+            - 3つのシーンを1つの動画に結合します
+            - 合計36秒の完成動画が作成されます
+            """)
+
+            if st.button("🔗 動画を結合", type="primary", use_container_width=True):
+                with st.spinner("🔗 動画を結合中..."):
                     try:
-                        session_data = {
-                            'book_name': scenario['book_name'],
-                            'scenario': scenario,
-                            'generated_video': final_result,
-                            'generation_mode': 'two_part',
-                            'edited_scenario_part1': st.session_state.get('edited_scenario_part1', ''),
-                            'edited_scenario_part2': st.session_state.get('edited_scenario_part2', ''),
+                        # シーン番号順にソート
+                        sorted_scene_nums = sorted(scene_videos.keys())
+                        video_files = [Path(scene_videos[num]['video_file']) for num in sorted_scene_nums]
+
+                        # 結合実行
+                        final_video_path = video_composer.concatenate_videos(
+                            video_files,
+                            output_file=Path("data/internal/videos") / f"{scenario['book_name']}_final.mp4"
+                        )
+
+                        # 最終動画を保存
+                        st.session_state.final_video = {
+                            'video_file': final_video_path,
+                            'duration': 36,
+                            'aspect_ratio': scenario.get('aspect_ratio', '16:9'),
+                            'scene_count': len(scenes)
                         }
-                        session_manager.save_session_state(session_data, scenario['book_name'])
-                    except Exception as e:
-                        st.warning(f"⚠️ セッション保存エラー: {str(e)}")
 
-                    st.success("✅ 2パート動画の結合が完了しました！")
-                    st.balloons()
-                    st.rerun()
-
-                except Exception as e:
-                    st.error(f"❌ 結合エラー: {str(e)}")
-                    st.exception(e)
-
-        else:
-            # シングルモード
-            with st.spinner("🎬 Sora2で動画を生成中..."):
-                try:
-                    st.write(f"DEBUG: アスペクト比 = {aspect_ratio}, Duration = {video_duration}")
-
-                    # Sora2で動画生成
-                    result = sora2_engine.generate_video(
-                        prompt=single_prompt,
-                        book_name=scenario['book_name'],
-                        aspect_ratio=aspect_ratio,
-                        duration=video_duration
-                    )
-
-                    if result['status'] == 'success':
-                        st.session_state.generated_video = result
-
-                        # セッション保存
+                        # セッション保存（完了）
                         try:
                             session_data = {
                                 'book_name': scenario['book_name'],
                                 'scenario': scenario,
-                                'generated_video': result,
-                                'generation_mode': 'single',
-                                'edited_scenario': st.session_state.get('edited_scenario', ''),
+                                'scenes': scenes,
+                                'scene_videos': {
+                                    k: {
+                                        'video_file': str(v['video_file']),
+                                        'generation_id': v.get('generation_id'),
+                                        'prompt': v.get('prompt')
+                                    } for k, v in scene_videos.items()
+                                },
+                                'final_video': {
+                                    'video_file': str(final_video_path),
+                                    'duration': 36
+                                },
+                                'generation_mode': 'scene_based',
+                                'status': 'completed'
                             }
                             session_manager.save_session_state(session_data, scenario['book_name'])
                         except Exception as e:
                             st.warning(f"⚠️ セッション保存エラー: {str(e)}")
 
-                        st.success("✅ 動画生成が完了しました！")
+                        st.success("✅ 動画結合完了！")
                         st.balloons()
                         st.rerun()
-                    else:
-                        st.error(f"❌ エラーが発生しました: {result.get('error', '不明なエラー')}")
-                        st.warning("⚠️ Sora2 APIが利用できない可能性があります。APIキーとアクセス権限を確認してください。")
 
-                except Exception as e:
-                    st.error(f"❌ エラーが発生しました: {str(e)}")
-                    st.exception(e)
-else:
-    st.success("✅ 動画生成済み")
+                    except Exception as e:
+                        st.error(f"❌ 結合エラー: {str(e)}")
+                        st.exception(e)
+        else:
+            # 最終動画プレビュー
+            final_video = st.session_state.final_video
 
-    video_result = st.session_state.generated_video
+            st.success("🎉 完成動画")
 
-    # 動画プレビュー
-    with st.container():
-        st.subheader("🎥 生成された動画")
+            if final_video.get('video_file') and Path(final_video['video_file']).exists():
+                video_path = Path(final_video['video_file'])
 
-    # 2パートモードの場合、個別パートも表示
-    if video_result.get('parts'):
-        st.markdown("### 📹 個別パート")
-        col_p1, col_p2 = st.columns(2)
+                # 動画プレビュー（中央）
+                col_left, col_video, col_right = st.columns([1, 2, 1])
 
-        with col_p1:
-            st.markdown("**Part 1**")
-            part1 = video_result['parts'][0]
-            if part1['video_file'] and part1['video_file'].exists():
-                st.video(str(part1['video_file']))
-                with open(part1['video_file'], 'rb') as f:
-                    st.download_button(
-                        "📥 Part 1をダウンロード",
-                        data=f.read(),
-                        file_name=f"part1_{scenario['book_name']}.mp4",
-                        mime="video/mp4",
-                        use_container_width=True
-                    )
+                with col_video:
+                    st.video(str(video_path))
 
-        with col_p2:
-            st.markdown("**Part 2**")
-            part2 = video_result['parts'][1]
-            if part2['video_file'] and part2['video_file'].exists():
-                st.video(str(part2['video_file']))
-                with open(part2['video_file'], 'rb') as f:
-                    st.download_button(
-                        "📥 Part 2をダウンロード",
-                        data=f.read(),
-                        file_name=f"part2_{scenario['book_name']}.mp4",
-                        mime="video/mp4",
-                        use_container_width=True
-                    )
+                # ファイル情報
+                file_size_mb = video_path.stat().st_size / (1024 * 1024)
 
-        st.markdown("---")
-        st.markdown("### 🎬 結合版")
+                col_info1, col_info2, col_info3 = st.columns(3)
 
-    if video_result.get('video_file') and video_result['video_file'].exists():
-        # 動画プレビュー（中央寄せ）
-        st.markdown("---")
-        st.subheader("🎬 動画プレビュー")
+                with col_info1:
+                    st.metric("動画の長さ", f"{final_video['duration']}秒")
 
-        col_left, col_video, col_right = st.columns([3, 2, 3])
+                with col_info2:
+                    st.metric("ファイルサイズ", f"{file_size_mb:.2f} MB")
 
-        with col_video:
-            st.video(str(video_result['video_file']))
+                with col_info3:
+                    st.metric("シーン数", f"{final_video['scene_count']}シーン")
 
-        # ファイル情報
-        video_path = Path(video_result['video_file'])
-        file_size_mb = video_path.stat().st_size / (1024 * 1024)
-        st.info(f"📊 ファイルサイズ: {file_size_mb:.2f} MB")
-        st.caption(f"💾 保存場所: {video_path}")
+                # ダウンロード
+                st.markdown("---")
 
-        # ダウンロードセクション
-        st.markdown("---")
-        st.subheader("📥 ダウンロード")
+                col_dl1, col_dl2, col_dl3 = st.columns([1, 2, 1])
 
-        col1, col2, col3 = st.columns([1, 2, 1])
+                with col_dl2:
+                    with open(video_path, 'rb') as f:
+                        st.download_button(
+                            label="📥 完成動画をダウンロード",
+                            data=f.read(),
+                            file_name=f"{scenario['book_name']}_promo.mp4",
+                            mime="video/mp4",
+                            type="primary",
+                            use_container_width=True
+                        )
 
-        with col2:
-            with open(video_result['video_file'], 'rb') as f:
-                video_bytes = f.read()
+                # 次のアクション
+                st.markdown("---")
+                st.subheader("🚀 次のアクション")
 
-            st.download_button(
-                label="📥 動画をダウンロード",
-                data=video_bytes,
-                file_name=f"{scenario['book_name']}_sora2.mp4",
-                mime="video/mp4",
-                type="primary",
-                use_container_width=True
-            )
+                col_a1, col_a2, col_a3 = st.columns(3)
 
-        # 生成情報
-        st.markdown("---")
+                with col_a1:
+                    if st.button("🔄 別の動画を生成", use_container_width=True):
+                        # 生成結果のみクリア
+                        keys_to_delete = ['scenes', 'scene_videos', 'final_video']
+                        for key in keys_to_delete:
+                            if key in st.session_state:
+                                del st.session_state[key]
+                        st.rerun()
 
-        with st.expander("📊 生成情報"):
-            st.json({
-                "書籍名": scenario['book_name'],
-                "アスペクト比": video_result['aspect_ratio'],
-                "動画の長さ": f"{video_result['duration']}秒",
-                "生成ID": video_result.get('generation_id', 'N/A'),
-                "使用プロンプト": video_result['prompt'][:200] + "..." if len(video_result['prompt']) > 200 else video_result['prompt']
-            })
+                with col_a2:
+                    if st.button("📝 シナリオを変更", use_container_width=True):
+                        # シーン関連をクリア
+                        keys_to_delete = ['scenes', 'scene_videos', 'final_video']
+                        for key in keys_to_delete:
+                            if key in st.session_state:
+                                del st.session_state[key]
+                        st.session_state.current_step = 2
+                        st.switch_page("pages/2_scenario_editor.py")
 
+                with col_a3:
+                    if st.button("📖 別の書籍で生成", use_container_width=True):
+                        # 全クリア
+                        keys_to_delete = ['scenes', 'scene_videos', 'final_video', 'selected_scenario']
+                        for key in keys_to_delete:
+                            if key in st.session_state:
+                                del st.session_state[key]
+                        st.session_state.current_step = 1
+                        st.switch_page("pages/1_upload_epub.py")
+            else:
+                st.warning("⚠️ 動画ファイルが見つかりません")
     else:
-        st.warning("⚠️ 動画ファイルが見つかりません")
-
-    # 次のアクション
-    st.markdown("---")
-    st.subheader("🚀 次のアクション")
-
-    col_a1, col_a2, col_a3, col_a4 = st.columns(4)
-
-    with col_a1:
-        if st.button("🔄 別の動画を生成", use_container_width=True):
-            del st.session_state.generated_video
-            st.rerun()
-
-    with col_a2:
-        if st.button("📝 シナリオを変更", use_container_width=True):
-            del st.session_state.generated_video
-            st.session_state.current_step = 2
-            st.switch_page("pages/2_scenario_editor.py")
-
-    with col_a3:
-        if st.button("📖 別の書籍で生成", use_container_width=True):
-            # 生成結果のみクリア
-            if 'generated_video' in st.session_state:
-                del st.session_state.generated_video
-            if 'selected_scenario' in st.session_state:
-                del st.session_state.selected_scenario
-            st.session_state.current_step = 1
-            st.switch_page("pages/1_upload_epub.py")
-
-    with col_a4:
-        if st.button("🔄 新規プロジェクト", use_container_width=True, type="secondary"):
-            # 全セッションクリア
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.session_state.current_step = 0
-            st.switch_page("app.py")
+        # まだ生成されていないシーンがある
+        remaining = [s['scene_number'] for s in scenes if s['scene_number'] not in scene_videos]
+        st.info(f"💡 残り {len(remaining)} シーンを生成してください: シーン {', '.join(map(str, remaining))}")
