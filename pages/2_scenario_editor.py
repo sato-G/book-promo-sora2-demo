@@ -234,13 +234,24 @@ if st.session_state.get('scenarios'):
         st.session_state.get('aspect_ratio') and
         st.session_state.get('visual_style')):
         if st.button("➡️ 次へ：Sora2動画生成", type="primary", use_container_width=True):
-            # 選択を保存（シーン数は3固定）
-            scenario_data = scenario_generator_v2.select_scenario(
-                st.session_state.selected_pattern_id,
-                st.session_state.aspect_ratio,
-                st.session_state.visual_style,
-                3  # 3シーン固定
-            )
+            # 選択されたパターンを取得（編集内容を反映）
+            selected_id = st.session_state.selected_pattern_id
+            selected_pattern = None
+            for pattern in st.session_state.scenarios:
+                if pattern['pattern_id'] == selected_id:
+                    selected_pattern = pattern
+                    break
+
+            # 編集済みのシナリオデータを作成
+            scenario_data = {
+                "book_name": book_analysis['book_name'],
+                "selected_pattern": selected_pattern,
+                "aspect_ratio": st.session_state.aspect_ratio,
+                "visual_style": st.session_state.visual_style,
+                "num_scenes": 3  # 3シーン固定
+            }
+
+            # セッション状態に保存（ファイルではなくメモリに保存）
             st.session_state.selected_scenario = scenario_data
             st.session_state.current_step = 3
 
