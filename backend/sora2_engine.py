@@ -117,16 +117,31 @@ def generate_video(
 
         print(f"✓ 動画生成完了 (Video ID: {video.id})")
 
-        # 動画をダウンロード
+        # 動画をダウンロード（リトライあり）
         print("📥 動画をダウンロード中...")
-        content = client.videos.download_content(video.id)
+        max_retries = 3
+        retry_delay = 5  # 秒
 
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "wb") as f:
-            for chunk in content.iter_bytes():
-                f.write(chunk)
+        for attempt in range(max_retries):
+            try:
+                content = client.videos.download_content(video.id)
 
-        print(f"✓ 保存完了: {output_path}")
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(output_path, "wb") as f:
+                    for chunk in content.iter_bytes():
+                        f.write(chunk)
+
+                print(f"✓ 保存完了: {output_path}")
+                break
+
+            except Exception as download_error:
+                if attempt < max_retries - 1:
+                    print(f"⚠️ ダウンロード失敗 (試行 {attempt + 1}/{max_retries}): {download_error}")
+                    print(f"   {retry_delay}秒後に再試行...")
+                    time.sleep(retry_delay)
+                else:
+                    # 最後の試行でも失敗
+                    raise download_error
 
         result = {
             'video_file': output_path,

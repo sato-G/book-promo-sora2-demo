@@ -11,6 +11,7 @@ from . import sora2_engine
 from . import prompt_engineer
 from . import video_composer
 from . import session_manager
+from . import scene_splitter_sora2
 
 __all__ = [
     'utils',
@@ -22,4 +23,5 @@ __all__ = [
     'prompt_engineer',
     'video_composer',
     'session_manager',
+    'scene_splitter_sora2',
 ]

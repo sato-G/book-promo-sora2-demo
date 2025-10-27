@@ -218,23 +218,14 @@ if st.session_state.get('scenarios'):
     if st.session_state.get('visual_style'):
         st.info(f"✅ 選択中: {st.session_state.visual_style}")
 
-    # シーン数選択
+    # 動画の長さ情報
     st.markdown("---")
-    st.subheader("🎬 シーン数設定")
-
-    col_scene1, col_scene2 = st.columns([1, 2])
-    with col_scene1:
-        num_scenes = st.number_input(
-            "シーン数",
-            min_value=3,
-            max_value=10,
-            value=st.session_state.get('num_scenes', 5),
-            help="動画を何シーンに分割するか"
-        )
-        st.session_state.num_scenes = num_scenes
-
-    with col_scene2:
-        st.info(f"📊 動画は{num_scenes}シーンに分割されます")
+    st.info("""
+    💡 **動画生成について**
+    - シナリオは自動的に3シーン（各12秒）に分割されます
+    - 合計36秒の動画が生成されます
+    - 各シーンのナレーションは70-80文字に最適化されます
+    """)
 
     # 次へ進むボタン（常に表示）
     st.markdown("---")
@@ -242,13 +233,13 @@ if st.session_state.get('scenarios'):
     if (st.session_state.get('selected_pattern_id') and
         st.session_state.get('aspect_ratio') and
         st.session_state.get('visual_style')):
-        if st.button("➡️ 次へ：ストーリーボード作成", type="primary", use_container_width=True):
-            # 選択を保存（v2を使用）
+        if st.button("➡️ 次へ：Sora2動画生成", type="primary", use_container_width=True):
+            # 選択を保存（シーン数は3固定）
             scenario_data = scenario_generator_v2.select_scenario(
                 st.session_state.selected_pattern_id,
                 st.session_state.aspect_ratio,
                 st.session_state.visual_style,
-                st.session_state.get('num_scenes', 5)
+                3  # 3シーン固定
             )
             st.session_state.selected_scenario = scenario_data
             st.session_state.current_step = 3
