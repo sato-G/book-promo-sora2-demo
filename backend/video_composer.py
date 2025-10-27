@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import List, Optional
 import time
 import tempfile
+import subprocess
+import shutil
 
 try:
     from moviepy.editor import VideoFileClip, concatenate_videoclips
@@ -18,6 +20,65 @@ try:
 except ImportError as e:
     MOVIEPY_AVAILABLE = False
     print(f"⚠️ moviepy import failed: {e}")
+
+# ffmpegの利用可能性をチェック
+FFMPEG_AVAILABLE = shutil.which('ffmpeg') is not None
+if FFMPEG_AVAILABLE:
+    print("✓ ffmpeg found in system PATH")
+else:
+    print("⚠️ ffmpeg not found in system PATH")
+
+
+def _concatenate_with_ffmpeg(video_files: List[Path], output_file: Path) -> Path:
+    """
+    ffmpegを使って動画を結合
+
+    Args:
+        video_files: 結合する動画ファイルのリスト
+        output_file: 出力ファイルパス
+
+    Returns:
+        結合された動画ファイルのパス
+    """
+    print(f"🎬 ffmpegで動画を結合中... ({len(video_files)}個のファイル)")
+
+    # 一時ファイルリストを作成
+    temp_dir = Path(tempfile.gettempdir())
+    concat_list_file = temp_dir / f"concat_list_{int(time.time())}.txt"
+
+    try:
+        # concat用のリストファイルを作成
+        with open(concat_list_file, 'w') as f:
+            for video_file in video_files:
+                # ffmpegのconcat形式: file 'path'
+                f.write(f"file '{video_file.absolute()}'\n")
+
+        # ffmpegで結合（再エンコードあり）
+        cmd = [
+            'ffmpeg',
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', str(concat_list_file),
+            '-c:v', 'libx264',
+            '-preset', 'fast',
+            '-crf', '23',
+            '-c:a', 'aac',
+            '-y',
+            str(output_file)
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            raise RuntimeError(f"ffmpeg failed: {result.stderr}")
+
+        print(f"✓ 結合完了: {output_file}")
+        return output_file
+
+    finally:
+        # 一時ファイルを削除
+        if concat_list_file.exists():
+            concat_list_file.unlink()
 
 
 def concatenate_videos(
@@ -49,7 +110,16 @@ def concatenate_videos(
         output_file = Path(output_file)
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    # moviepyを優先的に使用（Streamlit Cloud対応）
+    # ffmpegを優先的に使用（packages.txtで利用可能）
+    if FFMPEG_AVAILABLE:
+        try:
+            return _concatenate_with_ffmpeg(video_files, output_file)
+        except Exception as e:
+            print(f"⚠️ ffmpegでの結合に失敗: {e}")
+            if not MOVIEPY_AVAILABLE:
+                raise
+
+    # moviepyを使用（フォールバック）
     if MOVIEPY_AVAILABLE:
         try:
             print(f"🎬 moviepyで動画を結合中... ({len(video_files)}個のファイル)")
@@ -96,15 +166,16 @@ def concatenate_videos(
                 f"Streamlit Cloudではffmpegが利用できないため、moviepyのインストールとImageMagickの設定を確認してください。"
             )
 
-    # moviepyが利用できない場合
+    # moviepyもffmpegも利用できない場合
     import sys
     raise RuntimeError(
-        "moviepyがインストールされていません。\n\n"
+        "動画結合に必要なツールがインストールされていません。\n\n"
         "対処方法:\n"
-        "1. requirements.txtにmoviepy>=1.0.3があることを確認\n"
-        "2. Streamlit Cloudでアプリを再起動\n"
-        "3. pip install moviepy を実行\n\n"
+        "1. packages.txtにffmpegを追加（システムレベル）\n"
+        "2. requirements.txtにmoviepy>=1.0.3を追加（Python）\n"
+        "3. Streamlit Cloudでアプリを再起動\n\n"
         f"Python version: {sys.version}\n"
-        f"Available packages: moviepy が見つかりません\n\n"
-        "注: Streamlit Cloudではffmpegが利用できないため、moviepyが必須です。"
+        f"ffmpeg available: {FFMPEG_AVAILABLE}\n"
+        f"moviepy available: {MOVIEPY_AVAILABLE}\n\n"
+        "少なくとも1つのツールが必要です。"
     )
