@@ -497,14 +497,24 @@ else:
         st.markdown("### 🎬 結合版")
 
     if video_result.get('video_file') and video_result['video_file'].exists():
-        # 動画表示
-        col_left, col_video, col_right = st.columns([1, 3, 1])
+        # 動画プレビュー（中央寄せ）
+        st.markdown("---")
+        st.subheader("🎬 動画プレビュー")
+
+        col_left, col_video, col_right = st.columns([3, 2, 3])
 
         with col_video:
             st.video(str(video_result['video_file']))
 
-        # ダウンロードボタン
+        # ファイル情報
+        video_path = Path(video_result['video_file'])
+        file_size_mb = video_path.stat().st_size / (1024 * 1024)
+        st.info(f"📊 ファイルサイズ: {file_size_mb:.2f} MB")
+        st.caption(f"💾 保存場所: {video_path}")
+
+        # ダウンロードセクション
         st.markdown("---")
+        st.subheader("📥 ダウンロード")
 
         col1, col2, col3 = st.columns([1, 2, 1])
 
@@ -513,10 +523,11 @@ else:
                 video_bytes = f.read()
 
             st.download_button(
-                label="📥 動画をダウンロード（MP4）",
+                label="📥 動画をダウンロード",
                 data=video_bytes,
                 file_name=f"{scenario['book_name']}_sora2.mp4",
                 mime="video/mp4",
+                type="primary",
                 use_container_width=True
             )
 
@@ -535,28 +546,37 @@ else:
     else:
         st.warning("⚠️ 動画ファイルが見つかりません")
 
-    # 再生成ボタン
+    # 次のアクション
     st.markdown("---")
+    st.subheader("🚀 次のアクション")
 
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col_a1, col_a2, col_a3, col_a4 = st.columns(4)
 
-    with col1:
+    with col_a1:
         if st.button("🔄 別の動画を生成", use_container_width=True):
             del st.session_state.generated_video
             st.rerun()
 
-    with col2:
-        if st.button("⬅️ シナリオを変更", use_container_width=True):
+    with col_a2:
+        if st.button("📝 シナリオを変更", use_container_width=True):
             del st.session_state.generated_video
             st.session_state.current_step = 2
             st.switch_page("pages/2_scenario_editor.py")
 
-    with col3:
-        if st.button("🏠 最初から", use_container_width=True):
-            # セッションクリア
-            keys_to_delete = ['generated_video', 'selected_scenario', 'uploaded_epub', 'book_analysis']
-            for key in keys_to_delete:
-                if key in st.session_state:
-                    del st.session_state[key]
+    with col_a3:
+        if st.button("📖 別の書籍で生成", use_container_width=True):
+            # 生成結果のみクリア
+            if 'generated_video' in st.session_state:
+                del st.session_state.generated_video
+            if 'selected_scenario' in st.session_state:
+                del st.session_state.selected_scenario
+            st.session_state.current_step = 1
+            st.switch_page("pages/1_upload_epub.py")
+
+    with col_a4:
+        if st.button("🔄 新規プロジェクト", use_container_width=True, type="secondary"):
+            # 全セッションクリア
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
             st.session_state.current_step = 0
             st.switch_page("app.py")
