@@ -69,77 +69,124 @@ col_left, col_right = st.columns([1, 1])
 
 # 左側：アップロードエリア
 with col_left:
-    st.markdown("### 📖 EPUBファイルをアップロード")
+    st.markdown("### 📖 書籍情報を入力")
 
-    uploaded_file = st.file_uploader(
-        "ファイルを選択",
-        type=['epub'],
-        help="EPUB形式の電子書籍ファイルに対応しています"
+    # 入力方法選択
+    input_method = st.radio(
+        "入力方法を選択",
+        ["📁 EPUBファイル", "📝 テキスト貼り付け"],
+        horizontal=True
     )
 
-    if uploaded_file:
-        st.success(f"✅ {uploaded_file.name}")
-        st.info(f"📊 サイズ: {uploaded_file.size / 1024:.1f} KB")
+    if input_method == "📁 EPUBファイル":
+        uploaded_file = st.file_uploader(
+            "ファイルを選択",
+            type=['epub'],
+            help="EPUB形式の電子書籍ファイルに対応しています"
+        )
 
-        # 解析＆概要生成ボタン
-        if st.button("🚀 解析して概要を生成", type="primary", use_container_width=True):
+        if uploaded_file:
+            st.success(f"✅ {uploaded_file.name}")
+            st.info(f"📊 サイズ: {uploaded_file.size / 1024:.1f} KB")
 
-            progress_placeholder = st.empty()
-            status_placeholder = st.empty()
+            # 解析＆概要生成ボタン
+            if st.button("🚀 解析して概要を生成", type="primary", use_container_width=True):
 
-            try:
-                # EPUBファイルを保存
-                output_dir = Path("data/raw")
-                output_dir.mkdir(parents=True, exist_ok=True)
+                progress_placeholder = st.empty()
+                status_placeholder = st.empty()
 
-                epub_path = output_dir / uploaded_file.name
-                with open(epub_path, 'wb') as f:
-                    f.write(uploaded_file.read())
+                try:
+                    # EPUBファイルを保存
+                    output_dir = Path("data/raw")
+                    output_dir.mkdir(parents=True, exist_ok=True)
 
-                # プログレス表示用コンテナ
-                progress_container = st.container()
+                    epub_path = output_dir / uploaded_file.name
+                    with open(epub_path, 'wb') as f:
+                        f.write(uploaded_file.read())
 
-                with progress_container:
-                    # Step 1: テキスト抽出
-                    st.markdown('<div class="process-step">📄 Step 1/4: テキスト抽出中...</div>', unsafe_allow_html=True)
+                    # プログレス表示用コンテナ
+                    progress_container = st.container()
 
-                    # Step 2: チャンク化（book_analyzer内で実行）
-                    st.markdown('<div class="process-step">🔍 Step 2/4: チャンク化中...</div>', unsafe_allow_html=True)
+                    with progress_container:
+                        # Step 1: テキスト抽出
+                        st.markdown('<div class="process-step">📄 Step 1/4: テキスト抽出中...</div>', unsafe_allow_html=True)
 
-                    # Step 3: チャンクまとめ（book_analyzer内で実行）
-                    st.markdown('<div class="process-step">📝 Step 3/4: 各チャンクをまとめ中...</div>', unsafe_allow_html=True)
+                        # Step 2: チャンク化（book_analyzer内で実行）
+                        st.markdown('<div class="process-step">🔍 Step 2/4: チャンク化中...</div>', unsafe_allow_html=True)
 
-                    # Step 4: 全体概要生成（book_analyzer内で実行）
-                    st.markdown('<div class="process-step">✨ Step 4/4: 全体概要を生成中...</div>', unsafe_allow_html=True)
+                        # Step 3: チャンクまとめ（book_analyzer内で実行）
+                        st.markdown('<div class="process-step">📝 Step 3/4: 各チャンクをまとめ中...</div>', unsafe_allow_html=True)
 
-                # 新しいbook_analyzerを使用（チャンク化→チャンクまとめ→論文形式概要まで全自動）
-                result = book_analyzer.analyze_book(epub_path, output_dir)
+                        # Step 4: 全体概要生成（book_analyzer内で実行）
+                        st.markdown('<div class="process-step">✨ Step 4/4: 全体概要を生成中...</div>', unsafe_allow_html=True)
 
-                # セッション状態に保存
-                st.session_state.book_analysis = result
-                st.session_state.current_step = 2
+                    # 新しいbook_analyzerを使用（チャンク化→チャンクまとめ→論文形式概要まで全自動）
+                    result = book_analyzer.analyze_book(epub_path, output_dir)
 
-                progress_placeholder.empty()
-                status_placeholder.success("✅ 書籍分析が完了しました！")
-                st.balloons()
-                st.rerun()
+                    # セッション状態に保存
+                    st.session_state.book_analysis = result
+                    st.session_state.current_step = 2
 
-            except Exception as e:
-                progress_placeholder.empty()
-                status_placeholder.error(f"❌ エラー: {str(e)}")
-                st.exception(e)
+                    progress_placeholder.empty()
+                    status_placeholder.success("✅ 書籍分析が完了しました！")
+                    st.balloons()
+                    st.rerun()
 
-    else:
-        st.markdown("""
-        **対応ファイル形式:**
-        - EPUB (.epub)
+                except Exception as e:
+                    progress_placeholder.empty()
+                    status_placeholder.error(f"❌ エラー: {str(e)}")
+                    st.exception(e)
 
-        **推奨ファイルサイズ:**
-        - 10MB以下
+        else:
+            st.markdown("""
+            **対応ファイル形式:**
+            - EPUB (.epub)
 
-        **処理時間:**
-        - 約1-2分
-        """)
+            **推奨ファイルサイズ:**
+            - 10MB以下
+
+            **処理時間:**
+            - 約1-2分
+            """)
+
+    else:  # テキスト貼り付けモード
+        st.markdown("**書籍情報を入力してください**")
+
+        book_name = st.text_input(
+            "書籍名",
+            placeholder="例: 走れメロス",
+            help="プロモーション動画に使用する書籍のタイトル"
+        )
+
+        book_text = st.text_area(
+            "書籍の概要またはテキスト",
+            height=300,
+            placeholder="書籍の内容、あらすじ、または本文の一部を貼り付けてください...",
+            help="ここに入力したテキストを元にプロモーション動画を生成します"
+        )
+
+        char_count = len(book_text)
+        st.caption(f"📊 文字数: {char_count}文字")
+
+        if book_name and book_text and st.button("✅ この内容で進む", type="primary", use_container_width=True):
+            # 手動入力データをbook_analysis形式で保存
+            st.session_state.book_analysis = {
+                'book_name': book_name,
+                'summary': book_text,
+                'character_count': char_count,
+                'num_chunks': 1,
+                'book_type': '手動入力',
+                'main_topics': [],
+                'chunk_summaries': [book_text]
+            }
+            st.session_state.current_step = 2
+
+            st.success(f"✅ 「{book_name}」の情報を保存しました！")
+            st.balloons()
+            st.rerun()
+
+        if not (book_name and book_text):
+            st.info("💡 書籍名とテキストを入力してください")
 
 # 右側：結果表示エリア
 with col_right:

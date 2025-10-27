@@ -159,8 +159,20 @@ def create_scene_prompt_for_sora2(
 
     # test_sora2.py Test 2の成功パターンを使用
     # アスペクト比とビジュアルスタイルを反映
-    prompt = f"""Book promotional video, {duration} seconds, {style_desc} style, {aspect_ratio}.
+
+    # シーン1,2では本を表示せず、シーン3でのみ本を表示
+    if scene_number < total_scenes:
+        # シーン1,2: 本を表示しない、ナレーションの内容を映像化のみ
+        prompt = f"""Promotional video scene {scene_number}/{total_scenes}, {duration} seconds, {style_desc} style, {aspect_ratio}.
 Japanese voice-over with background music.
+DO NOT show book cover or title yet. Focus on story content only.
+
+Voice-over (Japanese): {narration_cleaned}"""
+    else:
+        # シーン3: 最後に本を表示
+        prompt = f"""Promotional video final scene {scene_number}/{total_scenes}, {duration} seconds, {style_desc} style, {aspect_ratio}.
+Japanese voice-over with background music.
+End with book cover reveal and title display.
 
 Voice-over (Japanese): {narration_cleaned}"""
 
