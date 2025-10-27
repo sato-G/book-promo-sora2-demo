@@ -2,135 +2,85 @@
 """
 シーン分割モジュール（Sora2版）
 
-シナリオを複数のシーンに分割し、各シーンに70-80文字のナレーションを割り当てる
+シナリオを複数のシーンに分割（元のテキストを正確に保持）
 """
 
-from pathlib import Path
 from typing import Dict, Any, List
-import google.generativeai as genai
-import os
-import json
-from dotenv import load_dotenv
-
-# .envファイルから環境変数を読み込む
-load_dotenv()
-
 
 def split_into_scenes_for_sora2(
     scenario: Dict[str, Any],
     num_scenes: int = 3,
-    chars_per_scene: int = 75
+    chars_per_scene: int = 75  # 互換性のため残すが未使用
 ) -> List[Dict[str, Any]]:
     """
-    シナリオを複数のシーンに分割（Sora2用、ナレーション70-80文字/シーン）
+    シナリオを複数のシーンに分割（元のテキストを正確に3分割）
 
     Args:
         scenario: 選択されたシナリオデータ
         num_scenes: 分割するシーン数（デフォルト3）
-        chars_per_scene: 1シーンあたりの文字数（デフォルト75）
+        chars_per_scene: 1シーンあたりの文字数（未使用、互換性のため残す）
 
     Returns:
         シーンのリスト（各シーンにナレーションと秒数を含む）
     """
 
-    # Gemini API設定
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise ValueError("GOOGLE_API_KEY環境変数が設定されていません")
-
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.5-flash-lite")
-
     # シナリオテキスト
     summary = scenario["selected_pattern"]["summary"]
-    book_name = scenario["book_name"]
 
-    prompt = f"""
-以下の書籍紹介シナリオを、{num_scenes}つのシーンに分割してください。
+    print(f"  📝 元のシナリオ: {len(summary)}文字")
+    print(f"  ✂️ {num_scenes}シーンに分割中...")
 
-## 書籍名
-{book_name}
+    # テキストをクリーニング（改行・空白を整理）
+    text = summary.replace('\n', '').strip()
 
-## シナリオ（全文）
-{summary}
+    # 文で分割（。で区切る）
+    sentences = [s.strip() + '。' for s in text.split('。') if s.strip()]
 
----
+    print(f"  📄 文の数: {len(sentences)}")
 
-## 重要な制約
+    # 3シーンに分割（文単位で切りの良いところで分ける）
+    total_sentences = len(sentences)
 
-**コンテンツ制限（必須）:**
-- **実在人物名は使用不可**（公人・一般人問わず）
-- 著作権キャラクターは不可
-- 18歳未満向けコンテンツのみ
-- 実在人物が登場する場合は「主人公」「彼」「彼女」などの代名詞に置き換える
+    if total_sentences >= 3:
+        # 文の数を3で分割
+        part_size = total_sentences // num_scenes
 
-**ナレーション文字数:**
-- 各シーンのナレーションは **40～50文字** に収める
-- シーン1と2は「続きがある」ように終わらせる
-- シーン3のみ結末を感じさせる
+        # シーン1: 最初の1/3
+        scene1_sentences = sentences[:part_size]
+        # シーン2: 次の1/3
+        scene2_sentences = sentences[part_size:part_size*2]
+        # シーン3: 残り全て
+        scene3_sentences = sentences[part_size*2:]
+    else:
+        # 文が3つ未満の場合は、できるだけ均等に分ける
+        scene1_sentences = [sentences[0]] if len(sentences) > 0 else []
+        scene2_sentences = [sentences[1]] if len(sentences) > 1 else []
+        scene3_sentences = sentences[2:] if len(sentences) > 2 else []
 
-**3シーン構成の設計:**
-1. **シーン1（導入）**: 問題提起や設定紹介。「戦いが始まる」「旅立つ」など続きを予感させる
-2. **シーン2（展開）**: 困難や葛藤。「敗北を知る」「試練に立ち向かう」など緊張感を残す
-3. **シーン3（結末）**: タイトル表示を意識。「物語が動き出す」「感動の結末へ」など完結感
-
----
-
-## タスク
-
-{num_scenes}つのシーンに分割し、各シーンに以下を含めてください：
-
-1. **scene_number**: シーン番号 (1-3)
-2. **narration**: ナレーションテキスト（40～50文字、実在人物名なし）
-3. **duration_seconds**: 12（固定）
-
-## 出力形式
-
-JSON形式で出力してください。
-
-{{
-  "scenes": [
-    {{
-      "scene_number": 1,
-      "narration": "導入。続きを予感させる終わり方（40-50文字）",
-      "duration_seconds": 12
-    }},
-    {{
-      "scene_number": 2,
-      "narration": "展開。緊張感を残す終わり方（40-50文字）",
-      "duration_seconds": 12
-    }},
-    {{
-      "scene_number": 3,
-      "narration": "結末。完結感のある終わり方（40-50文字）",
-      "duration_seconds": 12
-    }}
-  ]
-}}
-
-**重要:**
-- 各ナレーションは必ず40～50文字
-- 実在人物名は絶対に使用しない
-- シーン1,2は「続く...」という雰囲気を出す
-"""
-
-    print(f"  🤖 Gemini APIでシーン分割中（{num_scenes}シーン、{chars_per_scene}文字/シーン）...")
-    response = model.generate_content(
-        prompt,
-        generation_config={
-            "temperature": 0.7,
-            "response_mime_type": "application/json",
+    # 各シーンのナレーションを作成
+    scenes = [
+        {
+            "scene_number": 1,
+            "narration": ''.join(scene1_sentences),
+            "duration_seconds": 12
         },
-    )
-
-    result = json.loads(response.text)
-    scenes = result["scenes"]
+        {
+            "scene_number": 2,
+            "narration": ''.join(scene2_sentences),
+            "duration_seconds": 12
+        },
+        {
+            "scene_number": 3,
+            "narration": ''.join(scene3_sentences),
+            "duration_seconds": 12
+        }
+    ]
 
     # 文字数チェック
     for scene in scenes:
         char_count = len(scene['narration'])
-        print(f"  シーン{scene['scene_number']}: {char_count}文字")
+        print(f"  シーン{scene['scene_number']}: {char_count}文字 - {scene['narration'][:30]}...")
 
-    print(f"  ✓ {len(scenes)}シーンに分割完了")
+    print(f"  ✓ {len(scenes)}シーンに分割完了（元のテキストを正確に保持）")
 
     return scenes

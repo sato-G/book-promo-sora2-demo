@@ -121,11 +121,11 @@ def create_scene_prompt_for_sora2(
     - 実在人物名は使用不可（公人も含む）
     - 著作権キャラクター・音楽は不可
     - 18歳未満向けコンテンツのみ
-    - ナレーションは40-50文字推奨
+    - ナレーションは元のシナリオテキストをそのまま使用
 
     Args:
         book_name: 書籍名（実在人物名を含まない）
-        scene_narration: シーンのナレーション（40-50文字推奨）
+        scene_narration: シーンのナレーション（元のシナリオから分割）
         visual_style: ビジュアルスタイル
         aspect_ratio: アスペクト比
         duration: 動画の長さ（秒、通常12）
@@ -135,29 +135,30 @@ def create_scene_prompt_for_sora2(
     Returns:
         Sora2プロンプト
     """
+    # ビジュアルスタイルをSora2が理解できる形式に変換
     style_map = {
-        "Photorealistic": "cinematic",
-        "Picture book": "cinematic",
-        "3D cartoon": "cinematic",
-        "Retro comics": "cinematic",
-        "Anime": "cinematic",
-        "Pixel art": "cinematic",
+        "Photorealistic": "photorealistic cinematic",
+        "Picture book": "illustrated picture book",
+        "3D cartoon": "3D animated",
+        "Retro comics": "retro comic book",
+        "Anime": "anime",
+        "Pixel art": "pixel art",
         "Cinematic": "cinematic",
-        "Hyper cartoon": "cinematic",
-        "Illustration": "cinematic",
-        "Dreamtale": "cinematic",
-        "Skytale": "cinematic",
-        "80s film": "cinematic",
-        "Minimalist": "cinematic",
-        "Horror": "cinematic",
-        "Sketchbook": "cinematic"
+        "Hyper cartoon": "expressive cartoon",
+        "Illustration": "illustrated",
+        "Dreamtale": "dreamlike",
+        "Skytale": "atmospheric",
+        "80s film": "1980s film",
+        "Minimalist": "minimalist",
+        "Horror": "dark atmospheric",
+        "Sketchbook": "sketchy artistic"
     }
 
     style_desc = style_map.get(visual_style, "cinematic")
     narration_cleaned = scene_narration.replace('\n', '').replace('\r', '')
 
-    # test_sora2.py Test 2の成功パターンを厳密に使用
-    # このフォーマットから一切変更しない
+    # test_sora2.py Test 2の成功パターンを使用
+    # アスペクト比とビジュアルスタイルを反映
     prompt = f"""Book promotional video, {duration} seconds, {style_desc} style, {aspect_ratio}.
 Japanese voice-over with background music.
 

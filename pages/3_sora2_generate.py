@@ -126,18 +126,17 @@ st.subheader("🎬 Step 1: シーン分割")
 if 'scenes' not in st.session_state:
     st.info("""
     💡 **シーン分割について**
-    - AIが自動的にシナリオを3シーン（各12秒）に分割します
-    - 各シーンのナレーションは40-50文字に最適化されます
-    - シーン1,2は続きを予感させる構成、シーン3で完結します
+    - シナリオを自動的に3シーン（各12秒）に分割します
+    - 元のシナリオテキストを文単位で分割（テキストは変更されません）
+    - 文の区切りの良いところで3分割します
     """)
 
-    if st.button("🤖 シーンに分割", type="primary", use_container_width=True):
-        with st.spinner("🤖 Gemini APIでシーン分割中..."):
+    if st.button("✂️ シーンに分割", type="primary", use_container_width=True):
+        with st.spinner("✂️ シーン分割中..."):
             try:
                 scenes = scene_splitter_sora2.split_into_scenes_for_sora2(
                     scenario=scenario,
-                    num_scenes=3,
-                    chars_per_scene=45  # 40-50文字推奨
+                    num_scenes=3
                 )
                 st.session_state.scenes = scenes
                 st.success("✅ シーン分割完了！")
@@ -165,7 +164,7 @@ else:
 
     # シーン編集UI
     st.markdown("### 📝 シーン編集（ナレーション調整）")
-    st.caption("各シーンのナレーションを編集できます（40-50文字推奨）")
+    st.caption("各シーンのナレーションを編集できます（元のシナリオから自動分割）")
 
     edited_scenes = []
 
@@ -179,13 +178,7 @@ else:
             )
 
             char_count = len(edited_narration)
-
-            if char_count < 40:
-                st.warning(f"⚠️ {char_count}文字 - 短すぎます（推奨: 40-50文字）")
-            elif char_count > 50:
-                st.warning(f"⚠️ {char_count}文字 - 長すぎます（推奨: 40-50文字）")
-            else:
-                st.success(f"✅ {char_count}文字 - 適切です")
+            st.caption(f"📊 文字数: {char_count}文字")
 
             edited_scenes.append({
                 'scene_number': scene['scene_number'],
